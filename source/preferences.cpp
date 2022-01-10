@@ -610,7 +610,7 @@ void FixInvalidSettings()
 	if(!(GCSettings.SFXVolume >= 0 && GCSettings.SFXVolume <= 100))
 		GCSettings.SFXVolume = 40;
 	if(GCSettings.language < 0 || GCSettings.language >= LANG_LENGTH)
-		GCSettings.language = LANG_ENGLISH;
+		GCSettings.language = LANG_DEFAULT;
 	if(!(GCSettings.render >= 0 && GCSettings.render < 5))
 		GCSettings.render = 1;
 	if(!(GCSettings.videomode >= 0 && GCSettings.videomode < 7))
@@ -675,7 +675,7 @@ DefaultSettings ()
 	if(GCSettings.language == LANG_TRAD_CHINESE)
 		GCSettings.language = LANG_SIMP_CHINESE;
 #else
-	GCSettings.language = LANG_ENGLISH;
+	GCSettings.language = LANG_DEFAULT;
 #endif
 	GCSettings.OffsetMinutesUTC = 0;
 	GCSettings.GBHardware = 0;
@@ -786,8 +786,8 @@ LoadPrefsFromMethod (char * path)
 	{
 		strcpy(prefpath, path);
 
-		if(appPath[0] == 0)
-			strcpy(appPath, prefpath);
+		// if(appPath[0] == 0)
+		//	strcpy(appPath, prefpath);
 	}
 
 	return retval;
