@@ -30,7 +30,6 @@ jobs:
         touch dist/VisualBoyAdvanceGX/vbagx/roms/romsdir
         touch dist/VisualBoyAdvanceGX/vbagx/saves/savesdir
         cp hbc/* dist/VisualBoyAdvanceGX/apps/vbagx/
-        cp fonts/* dist/VisualBoyAdvanceGX/apps/vbagx/
         cp executables/vbagx-wii.dol dist/VisualBoyAdvanceGX/apps/vbagx/boot.dol
 
     - name: Upload Wii artifacts
