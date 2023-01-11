@@ -19,6 +19,7 @@
 #include "vbagx.h"
 #include "menu.h"
 #include "fileop.h"
+#include "video.h"
 #include "filebrowser.h"
 #include "input.h"
 #include "button_mapping.h"
@@ -197,6 +198,7 @@ preparePrefsData ()
 	createXMLSetting("yshift", "Vertical Video Shift", toStr(GCSettings.yshift));
 	createXMLSetting("colorize", "Colorize Mono Gameboy", toStr(GCSettings.colorize));
 	createXMLSetting("gbaFrameskip", "GBA Frameskip", toStr(GCSettings.gbaFrameskip));
+	createXMLSetting("TurboModeEnabled", "Turbo Mode Enabled", toStr(GCSettings.TurboModeEnabled));
 
 	createXMLSection("Menu", "Menu Settings");
 
@@ -512,6 +514,7 @@ decodePrefsData ()
 			loadXMLSetting(&GCSettings.yshift, "yshift");
 			loadXMLSetting(&GCSettings.colorize, "colorize");
 			loadXMLSetting(&GCSettings.gbaFrameskip, "gbaFrameskip");
+			loadXMLSetting(&GCSettings.TurboModeEnabled, "TurboModeEnabled");
 
 			// Menu Settings
 
@@ -658,6 +661,7 @@ DefaultSettings ()
 	GCSettings.yshift = 0; // vertical video shift
 	GCSettings.colorize = 0; // Colorize mono gameboy games
 	GCSettings.gbaFrameskip = 1; // Turn auto-frameskip on for GBA games
+	GCSettings.TurboModeEnabled = 1; // Enabled by default
 
 	GCSettings.WiimoteOrientation = 0;
 	GCSettings.ExitAction = 0;
@@ -844,7 +848,9 @@ bool LoadPrefs()
 		FixInvalidSettings();
 
 	// attempt to create directories if they don't exist
-	if(GCSettings.LoadMethod == DEVICE_SD || GCSettings.LoadMethod == DEVICE_USB) {
+	if((GCSettings.LoadMethod == DEVICE_SD && ChangeInterface(DEVICE_SD, SILENT))
+		|| (GCSettings.LoadMethod == DEVICE_USB && ChangeInterface(DEVICE_USB, SILENT)))  
+	{
 		char dirPath[MAXPATHLEN];
 		sprintf(dirPath, "%s%s", pathPrefix[GCSettings.LoadMethod], GCSettings.ScreenshotsFolder);
 		CreateDirectory(dirPath);
@@ -852,6 +858,10 @@ bool LoadPrefs()
 		CreateDirectory(dirPath);
 		sprintf(dirPath, "%s%s", pathPrefix[GCSettings.LoadMethod], GCSettings.ArtworkFolder);
 		CreateDirectory(dirPath);
+	}
+
+	if(GCSettings.videomode > 0) {
+		ResetVideo_Menu();
 	}
 
 #ifdef HW_RVL
