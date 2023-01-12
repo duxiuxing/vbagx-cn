@@ -207,7 +207,7 @@ preparePrefsData ()
 	createXMLSetting("MusicVolume", "Music Volume", toStr(GCSettings.MusicVolume));
 	createXMLSetting("SFXVolume", "Sound Effects Volume", toStr(GCSettings.SFXVolume));
 	createXMLSetting("Rumble", "Rumble", toStr(GCSettings.Rumble));
-	createXMLSetting("language", "Language", toStr(GCSettings.language));
+	createXMLSetting("language", "Language", toStr(GCSettings.Language()));
 	createXMLSetting("PreviewImage", "Preview Image", toStr(GCSettings.PreviewImage));
 
 	createXMLSection("Emulation", "Emulation Settings");
@@ -520,7 +520,11 @@ decodePrefsData ()
 			loadXMLSetting(&GCSettings.MusicVolume, "MusicVolume");
 			loadXMLSetting(&GCSettings.SFXVolume, "SFXVolume");
 			loadXMLSetting(&GCSettings.Rumble, "Rumble");
-			loadXMLSetting(&GCSettings.language, "language");
+			
+			int language = GCSettings.Language();
+			loadXMLSetting(&language, "language");
+			GCSettings.SetLanguage(language);
+
 			loadXMLSetting(&GCSettings.PreviewImage, "PreviewImage");
 
 			// Controller Settings
@@ -609,8 +613,6 @@ void FixInvalidSettings()
 		GCSettings.MusicVolume = 20;
 	if(!(GCSettings.SFXVolume >= 0 && GCSettings.SFXVolume <= 100))
 		GCSettings.SFXVolume = 40;
-	if(GCSettings.language < 0 || GCSettings.language >= LANG_LENGTH)
-		GCSettings.language = LANG_DEFAULT;
 	if(!(GCSettings.render >= 0 && GCSettings.render < 5))
 		GCSettings.render = 1;
 	if(!(GCSettings.videomode >= 0 && GCSettings.videomode < 7))
@@ -669,14 +671,8 @@ DefaultSettings ()
 	
 	GCSettings.BasicPalette = 0;
 	
-#ifdef HW_RVL
-	GCSettings.language = LANG_DEFAULT; // CONF_GetLanguage();
+	GCSettings.SetLanguage(LANG_DEFAULT);
 
-	if(GCSettings.language == LANG_TRAD_CHINESE)
-		GCSettings.language = LANG_SIMP_CHINESE;
-#else
-	GCSettings.language = LANG_DEFAULT;
-#endif
 	GCSettings.OffsetMinutesUTC = 0;
 	GCSettings.GBHardware = 0;
 	GCSettings.SGBBorder = 0;
