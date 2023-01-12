@@ -85,7 +85,7 @@ jobs:
     - name: Re-zip artifacts
       run: |
         cd dist/VisualBoyAdvanceGX
-        zip -r VisualBoyAdvanceGX-CN-Full.zip ../apps ./vbagx
+        zip -r VisualBoyAdvanceGX-CN-Full.zip ./apps ./vbagx
         # zip -r VisualBoyAdvanceGX-GameCube.zip VisualBoyAdvanceGX-GameCube
 
     - name: Update Git Tag
