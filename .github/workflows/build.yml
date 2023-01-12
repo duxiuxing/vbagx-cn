@@ -32,9 +32,9 @@ jobs:
         touch dist/VisualBoyAdvanceGX/vbagx/roms/romsdir
         touch dist/VisualBoyAdvanceGX/vbagx/saves/savesdir
         cp hbc/* dist/VisualBoyAdvanceGX/apps/vbagx/
-        cp fonts/en.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
-        cp fonts/jp.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
-        cp fonts/ko.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
+        # cp fonts/en.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
+        # cp fonts/jp.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
+        # cp fonts/ko.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
         # cp fonts/zh.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
         cp executables/vbagx-wii.dol dist/VisualBoyAdvanceGX/apps/vbagx/boot.dol
 
@@ -42,7 +42,7 @@ jobs:
       uses: actions/upload-artifact@v3
       if: ${{ matrix.image == 'Wii' }}
       with: 
-        name: VisualBoyAdvanceGX
+        name: VisualBoyAdvanceGX-CN
         path: |
          dist/VisualBoyAdvanceGX/
          
