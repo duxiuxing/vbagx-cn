@@ -5,13 +5,23 @@ Visual Boy Advance GX is a modified port of VBA-M.
 With it you can play GBA/Game Boy Color/Game Boy games on your Wii/GameCube.
 
 
-## Nightly builds
+## TABLE OF CONTENTS
+ - [Nightly Builds](#nightly-builds)
+ - [Features](#features)
+ - [Update History](#update-history)
+ - [Setup & Installation](#setup--installation)
+ - [Instructions](#instructions)
+ - [Credits](#credits)
+ - [Links](#links)
+
+
+## NIGHTLY BUILDS
 
 |Download nightly builds from continuous integration: 	| [![Build Status][Build]][Actions]
 |-------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
 
-[Actions]: https://github.com/dborth/vbagx/actions
-[Build]: https://github.com/dborth/vbagx/workflows/VBA%20GX%20Build/badge.svg
+[Actions]: https://github.com/dborth/vbagx/actions/workflows/build.yml
+[Build]: https://github.com/dborth/vbagx/actions/workflows/build.yml/badge.svg
 
 
 ## FEATURES
@@ -37,6 +47,13 @@ With it you can play GBA/Game Boy Color/Game Boy games on your Wii/GameCube.
 
 
 ## UPDATE HISTORY
+
+[2.4.6 - June 15, 2022]
+
+* Compiled with latest devkitPPC/libogc
+* Added "Enable Turbo Mode" toggle to the Video Settings menu (based on InfiniteBlueGX's code)
+* Updated translations
+* Improved forwarder support
 
 [2.4.5 - March 23, 2021]
 
@@ -171,7 +188,7 @@ With it you can play GBA/Game Boy Color/Game Boy games on your Wii/GameCube.
   * To squish the picture so it appears correctly on a 16:9 TV, you can open
     the settings.xml file and add 10 to the gbFixed/gbaFixed value. However,
 	setting your TV to 4:3 mode will yield a better picture.
-* Real-time clock fixes for GB/GBC games, including Pokémon G/S/C
+* Real-time clock fixes for GB/GBC games, including PokÃ©mon G/S/C
   * RTC data in save file stored as little-endian
   * Option added for UTC offset in the main menu (only required if you use the
     same SRAM on other, time-zone-aware platforms)
@@ -729,7 +746,7 @@ Game Boy (Color) and Game Boy Advance games.
 
 For both loading and saving, the PNG filename is [TITLE].png, where [TITLE]
 is the ROM title defined at 0x134 (for GB games) or 0xA0 (for GBA games). For
-example, POKEMON_SFXAAXE.png will be loaded for Pokémon Silver. If no PNG file
+example, POKEMON_SFXAAXE.png will be loaded for PokÃ©mon Silver. If no PNG file
 by that name exists, VBA-GX will try loading default.png (for GB games) or
 defaultgba.png (for GBA games) instead.
 
