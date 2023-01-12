@@ -101,4 +101,4 @@ jobs:
         removeArtifacts: true
         replacesArtifacts: false
         tag: Pre-release
-        artifacts: "dist/VisualBoyAdvanceGX*.zip"
+        artifacts: "dist/VisualBoyAdvanceGX/*.zip"
