@@ -334,7 +334,7 @@ int main(int argc, char *argv[])
 
 	if(!SupportedIOS(ios))
 	{
-		s32 preferred = IOS_GetPreferredVersion();
+		s32 preferred = 58; // IOS_GetPreferredVersion();
 
 		if(SupportedIOS(preferred))
 			IOS_ReloadIOS(preferred);
@@ -374,8 +374,7 @@ int main(int argc, char *argv[])
 	
 	#ifdef HW_RVL
 	// store path app was loaded from
-	if(argc > 0 && argv[0] != NULL)
-		CreateAppPath(argv[0]);
+	CreateAppPath(argc, argv);
 	#endif
 
 	InitialiseSound();
