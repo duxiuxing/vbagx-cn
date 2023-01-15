@@ -1,4 +1,9 @@
 # Visual Boy Advance GX
+
+- [Visual Boy Advance GX 中文版简介](./docs/README.md)
+
+---
+
 https://github.com/dborth/vbagx (Under GPL License)
  
 Visual Boy Advance GX is a modified port of VBA-M.
