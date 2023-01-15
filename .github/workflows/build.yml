@@ -25,18 +25,29 @@ jobs:
     
     - name: Copy Wii artifacts
       if: ${{ matrix.image == 'Wii' }}
-      run: | 
+      run: |
+        ##### ./apps/vbagx #####
         mkdir -p dist/VisualBoyAdvanceGX/apps/vbagx
-        mkdir -p dist/VisualBoyAdvanceGX/vbagx/roms
-        mkdir dist/VisualBoyAdvanceGX/vbagx/saves
-        touch dist/VisualBoyAdvanceGX/vbagx/roms/romsdir
-        touch dist/VisualBoyAdvanceGX/vbagx/saves/savesdir
-        cp hbc/* dist/VisualBoyAdvanceGX/apps/vbagx/
+        cp executables/vbagx-wii.dol dist/VisualBoyAdvanceGX/apps/vbagx/boot.dol
         cp fonts/en.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
         cp fonts/jp.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
         cp fonts/ko.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
         # cp fonts/zh.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
-        cp executables/vbagx-wii.dol dist/VisualBoyAdvanceGX/apps/vbagx/boot.dol
+        cp hbc/icon.png dist/VisualBoyAdvanceGX/apps/vbagx/
+        cp hbc/meta.xml dist/VisualBoyAdvanceGX/apps/vbagx/
+        ##### ./vbagx  #####
+        mkdir -p dist/VisualBoyAdvanceGX/vbagx/artwork
+        touch dist/VisualBoyAdvanceGX/vbagx/artwork/artworkdir
+        mkdir dist/VisualBoyAdvanceGX/vbagx/cheats        
+        touch dist/VisualBoyAdvanceGX/vbagx/cheats/cheatsdir
+        mkdir -p dist/VisualBoyAdvanceGX/vbagx/covers
+        touch dist/VisualBoyAdvanceGX/vbagx/covers/coversdir
+        mkdir dist/VisualBoyAdvanceGX/vbagx/roms        
+        touch dist/VisualBoyAdvanceGX/vbagx/roms/romsdir
+        mkdir dist/VisualBoyAdvanceGX/vbagx/saves
+        touch dist/VisualBoyAdvanceGX/vbagx/saves/savesdir        
+        mkdir -p dist/VisualBoyAdvanceGX/vbagx/screenshots
+        touch dist/VisualBoyAdvanceGX/vbagx/screenshots/screenshotsdir  
 
     - name: Upload Wii artifacts
       uses: actions/upload-artifact@v3
@@ -45,7 +56,15 @@ jobs:
         name: VisualBoyAdvanceGX
         path: |
          dist/VisualBoyAdvanceGX/
-         
+
+    - name: Upload Sample artifacts
+      uses: actions/upload-artifact@v3
+      if: ${{ matrix.image == 'Wii' }}
+      with:
+        name: VisualBoyAdvanceGX-Sample
+        path: |
+         sample/
+
     - name: Build GameCube
       if: ${{ matrix.image == 'GameCube' }}
       run: |
