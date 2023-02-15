@@ -7,7 +7,7 @@ Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方�
 
 ![中文版界面](./vbagx-cn.png)
 
-以下是对下载页面中的四个 .zip 文件的简单说明：
+下载页面目前包含了以下几个 .zip 文件：
 
 ## 1. VisualBoyAdvanceGX-CN.zip
 
@@ -49,7 +49,15 @@ Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方�
 
 ![频道预览](./channel-banner.png)
 
-## 4. VisualBoyAdvanceGX-Sample.zip
+## 4. VisualBoyAdvanceGX-Forwarder.zip
+
+网友制作的专属频道，界面效果如下：
+
+![频道图标](./forwarder-icon.png)
+
+![频道预览](./forwarder-banner.png)
+
+## 5. VisualBoyAdvanceGX-Sample.zip
 
 演示文件，解压到 SD 卡或者 USB 设备的 vbagx 文件夹，即可在模拟器中选择游戏进行试玩，按 (+) 键可切换预览图片的类型。
 
