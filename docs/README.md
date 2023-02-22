@@ -51,11 +51,7 @@ Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方�
 
 ## 4. VisualBoyAdvanceGX-Forwarder.zip
 
-网友制作的专属频道，界面效果如下：
-
-![频道图标](./forwarder-icon.png)
-
-![频道预览](./forwarder-banner.png)
+网友制作的 Visual Boy Advance GX 频道安装包，界面效果可参考[《Visual Boy Advance GX 自制频道一览》](../forwarder/README.md)。
 
 ## 5. VisualBoyAdvanceGX-Sample.zip
 
