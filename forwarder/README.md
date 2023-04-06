@@ -1,4 +1,4 @@
-# Visual Boy Advance GX 自制频道一览
+# Visual Boy Advance GX 频道一览
 
 
 ## 一、VisualBoyAdvanceGX-Channel-Installer.zip
