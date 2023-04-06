@@ -40,20 +40,7 @@ Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方�
 | 13 | 土耳其语 | | |
 
 
-## 三、VisualBoyAdvanceGX-Channel-Installer.zip
-
-官方提供的频道安装器，可以在系统桌面安装一个模拟器的专属频道：
-
-![频道安装器](./channel-installer.png)
-
-打开频道就可以打开模拟器：
-
-| Icon | Banner |
-| :---: | :---: |
-| ![Icon](./channel-icon.png) | ![Banner](./channel-banner.png) |
-
-
-## 四、VisualBoyAdvanceGX-Sample.zip
+## 三、VisualBoyAdvanceGX-Sample.zip
 
 演示文件，解压到 SD 卡或者 USB 设备的 vbagx 文件夹，即可在模拟器中选择游戏进行试玩，按 (+) 键可切换预览图片的类型。
 
@@ -68,6 +55,7 @@ Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方�
 
 ![设置预览图片的检索目录](./settings-saving-loading.png)
 
-## 五、VisualBoyAdvanceGX-Forwarder*.wad
 
-网友制作的 Visual Boy Advance GX 频道安装包，界面效果可参考[《Visual Boy Advance GX 自制频道一览》](../forwarder/README.md)。
+## 四、VisualBoyAdvanceGX-Channel-Installer.zip 和 VisualBoyAdvanceGX-Forwarder*.wad
+
+Visual Boy Advance GX 频道安装包，可以在系统桌面安装模拟器的专属频道，打开频道就可以打开模拟器。界面效果可参考[《Visual Boy Advance GX 频道一览》](../forwarder/README.md)。
