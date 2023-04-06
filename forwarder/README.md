@@ -22,11 +22,11 @@
 | ![Icon](./VisualBoyAdvanceGX-Forwarder-VBGX-icon.png) | ![Banner](./VisualBoyAdvanceGX-Forwarder-VBGX-banner.png) |
 
 
-## 四、VisualBoyAdvanceGX-Forwarder-VBGX-TWN4.3.wad
+## 四、VisualBoyAdvanceGX-Forwarder-VBGX-ZHTW.wad
 
-TWN4.3 系统专用，基于 VisualBoyAdvanceGX-Forwarder-VBGX.wad 制作：
+繁体中文系统专用，基于 VisualBoyAdvanceGX-Forwarder-VBGX.wad 制作：
 
 | Icon | Banner |
 | :---: | :---: |
-| ![Icon](./VisualBoyAdvanceGX-Forwarder-VBGX-TWN4.3-icon.png) | ![Banner](./VisualBoyAdvanceGX-Forwarder-VBGX-banner.png) |
+| ![Icon](./VisualBoyAdvanceGX-Forwarder-VBGX-ZHTW-icon.png) | ![Banner](./VisualBoyAdvanceGX-Forwarder-VBGX-banner.png) |
 | 提示文字修改为繁体中文 | 无改动 |
