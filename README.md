@@ -1,6 +1,6 @@
 # Visual Boy Advance GX
 
-- [Visual Boy Advance GX 中文版简介](./docs/README.md)
+- [VBA GX 中文版简介](./docs/README.md)
 
 ---
 
