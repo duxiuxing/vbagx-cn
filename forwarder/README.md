@@ -43,3 +43,10 @@
 | :---: | :---: |
 | ![Icon](./VisualBoyAdvanceGX-Forwarder-VBGX-ZHTW-icon.png) | ![Banner](./VisualBoyAdvanceGX-Forwarder-VBGX-banner.png) |
 | 提示文字修改为繁体中文 | 无改动 |
+
+
+## 六、VisualBoyAdvanceGX-RunningSnakes-GBLX.wad
+
+| Icon | Banner |
+| :---: | :---: |
+| ![Icon](./VisualBoyAdvanceGX-RunningSnakes-GBLX-icon.png) | ![Banner](./VisualBoyAdvanceGX-RunningSnakes-GBLX-banner.png) |
