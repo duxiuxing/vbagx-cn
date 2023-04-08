@@ -27,35 +27,35 @@ jobs:
       if: ${{ matrix.image == 'Wii' }}
       run: |
         ##### ./apps/vbagx #####
-        mkdir -p dist/VisualBoyAdvanceGX/apps/vbagx
-        cp executables/vbagx-wii.dol dist/VisualBoyAdvanceGX/apps/vbagx/boot.dol
-        # cp fonts/en.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
-        # cp fonts/jp.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
-        # cp fonts/ko.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
-        # cp fonts/zh.ttf dist/VisualBoyAdvanceGX/apps/vbagx/
-        cp hbc/icon.png dist/VisualBoyAdvanceGX/apps/vbagx/
-        cp hbc/meta.xml dist/VisualBoyAdvanceGX/apps/vbagx/
+        mkdir -p dist/VbaGX/apps/vbagx
+        cp executables/vbagx-wii.dol dist/VbaGX/apps/vbagx/boot.dol
+        # cp fonts/en.ttf dist/VbaGX/apps/vbagx/
+        # cp fonts/jp.ttf dist/VbaGX/apps/vbagx/
+        # cp fonts/ko.ttf dist/VbaGX/apps/vbagx/
+        # cp fonts/zh.ttf dist/VbaGX/apps/vbagx/
+        cp hbc/icon.png dist/VbaGX/apps/vbagx/
+        cp hbc/meta.xml dist/VbaGX/apps/vbagx/
         ##### ./vbagx  #####
-        mkdir -p dist/VisualBoyAdvanceGX/vbagx/artwork
-        touch dist/VisualBoyAdvanceGX/vbagx/artwork/artworkdir
-        mkdir dist/VisualBoyAdvanceGX/vbagx/cheats        
-        touch dist/VisualBoyAdvanceGX/vbagx/cheats/cheatsdir
-        mkdir -p dist/VisualBoyAdvanceGX/vbagx/covers
-        touch dist/VisualBoyAdvanceGX/vbagx/covers/coversdir
-        mkdir dist/VisualBoyAdvanceGX/vbagx/roms        
-        touch dist/VisualBoyAdvanceGX/vbagx/roms/romsdir
-        mkdir dist/VisualBoyAdvanceGX/vbagx/saves
-        touch dist/VisualBoyAdvanceGX/vbagx/saves/savesdir        
-        mkdir -p dist/VisualBoyAdvanceGX/vbagx/screenshots
-        touch dist/VisualBoyAdvanceGX/vbagx/screenshots/screenshotsdir
+        mkdir -p dist/VbaGX/vbagx/artwork
+        touch dist/VbaGX/vbagx/artwork/artworkdir
+        mkdir dist/VbaGX/vbagx/cheats        
+        touch dist/VbaGX/vbagx/cheats/cheatsdir
+        mkdir -p dist/VbaGX/vbagx/covers
+        touch dist/VbaGX/vbagx/covers/coversdir
+        mkdir dist/VbaGX/vbagx/roms        
+        touch dist/VbaGX/vbagx/roms/romsdir
+        mkdir dist/VbaGX/vbagx/saves
+        touch dist/VbaGX/vbagx/saves/savesdir        
+        mkdir -p dist/VbaGX/vbagx/screenshots
+        touch dist/VbaGX/vbagx/screenshots/screenshotsdir  
 
     - name: Upload Wii artifacts
       uses: actions/upload-artifact@v3
       if: ${{ matrix.image == 'Wii' }}
       with: 
-        name: VisualBoyAdvanceGX-CN
+        name: VbaGX
         path: |
-         dist/VisualBoyAdvanceGX/
+         dist/VbaGX/
 
     - name: Build GameCube
       if: ${{ matrix.image == 'GameCube' }}
@@ -65,16 +65,16 @@ jobs:
     - name: Copy GameCube artifact
       if: ${{ matrix.image == 'GameCube' }}
       run: | 
-        mkdir -p dist/VisualBoyAdvanceGX-GameCube
-        cp executables/vbagx-gc.dol dist/VisualBoyAdvanceGX-GameCube/
+        mkdir -p dist/VbaGX-GameCube
+        cp executables/vbagx-gc.dol dist/VbaGX-GameCube/
     
     - name: Upload GameCube artifact
       uses: actions/upload-artifact@v3
       if: ${{ matrix.image == 'GameCube' }}
       with: 
-        name: VisualBoyAdvanceGX-GameCube
+        name: VbaGX-GameCube
         path: |
-         dist/VisualBoyAdvanceGX-GameCube/
+         dist/VbaGX-GameCube/
 
   release:
     name: Release
@@ -95,9 +95,9 @@ jobs:
 
     - name: Re-zip artifacts
       run: |
-        cd dist/VisualBoyAdvanceGX
-        zip -r VisualBoyAdvanceGX-CN-Full.zip ./apps ./vbagx
-        # zip -r VisualBoyAdvanceGX-GameCube.zip VisualBoyAdvanceGX-GameCube
+        cd dist/VbaGX
+        zip -r VbaGX-CN-Full.zip ./apps ./vbagx
+        # zip -r VbaGX-GameCube.zip VbaGX-GameCube
 
     - name: Update Git Tag
       run: |
@@ -112,4 +112,4 @@ jobs:
         removeArtifacts: true
         replacesArtifacts: false
         tag: Pre-release
-        artifacts: "dist/VisualBoyAdvanceGX/*.zip"
+        artifacts: "dist/VbaGX/*.zip"

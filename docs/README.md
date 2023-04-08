@@ -1,23 +1,23 @@
-# Visual Boy Advance GX 中文版简介
+# VBA GX 中文版简介
 
 
 ![中文版界面](./vbagx-cn.png)
 
-Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方版本](http://wiibrew.org/wiki/Visual_Boy_Advance_GX)为英文，本分支为其中文版的开发分支。
+VBA GX（全称 Visual Boy Advance GX）是 Wii 上面著名的任天堂掌机模拟器，[官方版本](http://wiibrew.org/wiki/Visual_Boy_Advance_GX)为英文，本分支为其中文版的开发分支。
 
 > 中文版下载页面：<https://github.com/duxiuxing/vbagx-cn/releases>
 
 以下是各个下载文件的说明：
 
 
-## 一、VisualBoyAdvanceGX-CN.zip
+## 一、VbaGX-CN.zip
 
-模拟器的中文版，与模拟器的中文完整版（VisualBoyAdvanceGX-CN-Full.zip）择一下载即可：
+模拟器的中文版，与模拟器的中文完整版（VbaGX-CN-Full.zip）择一下载即可：
 
 ![中文版](./cn-only-description.png)
 
 
-## 二、VisualBoyAdvanceGX-CN-Full.zip
+## 二、VbaGX-CN-Full.zip
 
 模拟器的中文完整版，由于打包了外语字库，所以总的文件体积会略大一些：
 
@@ -40,7 +40,7 @@ Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方�
 | 13 | 土耳其语 | | |
 
 
-## 三、VisualBoyAdvanceGX-Sample.zip
+## 三、VbaGX-Sample.zip
 
 演示文件，解压到 SD 卡或者 USB 设备的 vbagx 文件夹，即可在模拟器中选择游戏进行试玩，按 (+) 键可切换预览图片的类型。
 
@@ -56,6 +56,6 @@ Visual Boy Advance GX 是 Wii 上面著名的任天堂掌机模拟器，[官方�
 ![设置预览图片的检索目录](./settings-saving-loading.png)
 
 
-## 四、VisualBoyAdvanceGX-Channel-Installer.zip 和 VisualBoyAdvanceGX-Forwarder*.wad
+## 四、VbaGX-Channel-Installer.zip 和 VbaGX-Forwarder*.wad
 
-Visual Boy Advance GX 频道安装包，可以在系统桌面安装模拟器的专属频道，打开频道就可以打开模拟器。界面效果可参考[《Visual Boy Advance GX 频道一览》](../forwarder/README.md)。
+VBA GX 频道安装包，可以在系统桌面安装模拟器的专属频道，打开频道就可以打开模拟器。界面效果可参考[《VBA GX 频道一览》](../forwarder/README.md)。
