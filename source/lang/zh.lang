@@ -394,6 +394,9 @@ msgstr "从 Patch 读取中…"
 msgid "Loading..."
 msgstr "读取中…"
 
+msgid "Main developer"
+msgstr "主要开发人员"
+
 msgid "Main Menu"
 msgstr "主菜单"
 
@@ -874,6 +877,9 @@ msgstr "GitHub 上的 VBA GX"
 msgid "SoftDev, emukidid"
 msgstr "dborth/vbagx, duxiuxing/vbagx-cn"
 
+msgid "Visual Boy Advance - M"
+msgstr "VBA - M"
+
 msgid "Vertical"
 msgstr "垂直方向"
 
@@ -983,7 +989,7 @@ msgid "Original FCE"
 msgstr "最初版的 FCE"
 
 msgid "libogc / devkitPPC"
-msgstr "libogc / devkitPPC 开源代码"
+msgstr "libogc / devkitPPC"
 
 msgid "IOS: %d"
 msgstr "IOS 版本：%d"
