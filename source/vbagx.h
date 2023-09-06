@@ -68,8 +68,6 @@ enum
 	LANG_DEFAULT = LANG_SIMP_CHINESE
 };
 
-#define MULTI_LANGUAGE_SUPPORT
-
 struct SGCSettings
 {
 	float	gbaZoomHor;    // GBA horizontal zoom amount
