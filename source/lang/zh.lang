@@ -226,6 +226,9 @@ msgstr "空或不正确的 ZIP 文件！"
 msgid "Emulation"
 msgstr "模拟设置"
 
+msgid "Enable Turbo Mode"
+msgstr "Turbo 模式"
+
 msgid "Enabled"
 msgstr "启动"
 
@@ -282,6 +285,15 @@ msgstr "磁盘驱动器 BIOS 文件没有找到！"
 
 msgid "Filtered"
 msgstr "已过滤"
+
+msgid "Filtered (Auto)"
+msgstr "自动过滤"
+
+msgid "Filtered (Sharp)"
+msgstr "锐化过滤"
+
+msgid "Filtered (Soft)"
+msgstr "柔化过滤"
 
 msgid "Filtering"
 msgstr "滤镜"
