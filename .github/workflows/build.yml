@@ -29,10 +29,10 @@ jobs:
         ##### ./apps/vbagx #####
         mkdir -p dist/VbaGX/apps/vbagx
         cp executables/vbagx-wii.dol dist/VbaGX/apps/vbagx/boot.dol
-        cp fonts/en.ttf dist/VbaGX/apps/vbagx/
+        # cp fonts/en.ttf dist/VbaGX/apps/vbagx/
         cp fonts/jp.ttf dist/VbaGX/apps/vbagx/
         cp fonts/ko.ttf dist/VbaGX/apps/vbagx/
-        # cp fonts/zh.ttf dist/VbaGX/apps/vbagx/
+        cp fonts/zh.ttf dist/VbaGX/apps/vbagx/
         cp hbc/icon.png dist/VbaGX/apps/vbagx/
         cp hbc/meta.xml dist/VbaGX/apps/vbagx/
         ##### ./vbagx  #####
