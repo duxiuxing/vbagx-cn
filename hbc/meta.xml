@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <app version="1">
-  <name>Visual Boy Advance GX Full</name>
-  <coder>Tantric</coder>
+  <name>Visual Boy Advance GX</name>
+  <coder>Tantric, R-Sam</coder>
   <version>2.4.7</version>
   <release_date>20230731</release_date>
   <short_description>GBA/GBC/GB Emulator</short_description>
   <long_description>1. A port of Visual Boy Advance - M to the Wii;
 2. Use of English as the default UI language;
-3. Support multi-language, such as Japanese, German, French, Spanish, Italian, Dutch, Chinese (Simplified), Korean, Portuguese, Brazilian Portuguese, Catalan, Turkish.</long_description>
+3. Support multi-language, such as Japanese, German, French, Spanish, Italian, Dutch, Chinese (Simplified and Traditional), Korean, Portuguese, Brazilian Portuguese, Catalan, Turkish, Swedish.</long_description>
   <ahb_access />
 </app>
