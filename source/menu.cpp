@@ -139,6 +139,7 @@ void ChangeLanguage() {
 
 	bool needLoadFont = false;
 	if (LANG_SIMP_CHINESE == LANG_DEFAULT
+		|| LANG_TRAD_CHINESE == LANG_DEFAULT
 		|| LANG_JAPANESE == LANG_DEFAULT
 		|| LANG_KOREAN == LANG_DEFAULT) {
 		if (GCSettings.Language() == LANG_DEFAULT)
@@ -148,6 +149,7 @@ void ChangeLanguage() {
 	}
 	else {
 		if (LANG_SIMP_CHINESE == GCSettings.Language()
+			|| LANG_TRAD_CHINESE == GCSettings.Language()
 			|| LANG_JAPANESE == GCSettings.Language()
 			|| LANG_KOREAN == GCSettings.Language())
 			needLoadFont = true;
@@ -167,6 +169,7 @@ void ChangeLanguage() {
 				sprintf(filepath, "%s/jp.ttf", appPath);
 				break;
 			case LANG_SIMP_CHINESE:
+			case LANG_TRAD_CHINESE:
 				sprintf(filepath, "%s/zh.ttf", appPath);
 				break;
 			default:
@@ -3956,10 +3959,8 @@ static int MenuSettingsMenu()
 			case 5:
 			{
 				int value = GCSettings.Language() + 1;
-				if (value == LANG_TRAD_CHINESE) // skip (not supported)
-					value = LANG_KOREAN;
-				else if (value >= LANG_LENGTH)
-					value = LANG_JAPANESE;
+				if (value >= LANG_LENGTH)
+					value = LANG_DEFAULT;
 				GCSettings.SetLanguage(value);
 				break;
 			}
