@@ -53,7 +53,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: ${{ matrix.image == 'Wii' }}
       with:
-        name: VbaGX-CN
+        name: VbaGX.2.4.7.cn
         path: |
          dist/VbaGX/
 
@@ -96,7 +96,7 @@ jobs:
     - name: Re-zip artifacts
       run: |
         cd dist/VbaGX
-        zip -r VbaGX-Full.zip ./apps ./vbagx
+        zip -r VbaGX.2.4.7.world.zip ./apps ./vbagx
         # zip -r VbaGX-GameCube.zip VbaGX-GameCube
 
     - name: Update Git Tag
