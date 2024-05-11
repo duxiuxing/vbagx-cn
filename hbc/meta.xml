@@ -2,8 +2,8 @@
 <app version="1">
   <name>Visual Boy Advance GX</name>
   <coder>Tantric, R-Sam</coder>
-  <version>2.4.7.cn</version>
-  <release_date>20230731</release_date>
+  <version>2.4.8.cn</version>
+  <release_date>20240330</release_date>
   <short_description>GBA/GBC/GB Emulator</short_description>
   <long_description>Website: https://github.com/duxiuxing/vbagx-cn
 
