@@ -1,6 +1,9 @@
 # Visual Boy Advance GX
 
+
+- world 分支是基于 master 分支拉取的
 - [VBA GX 中文版简介](./docs/README.md)
+
 
 ---
 
