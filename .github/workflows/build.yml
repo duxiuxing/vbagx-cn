@@ -62,7 +62,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: ${{ matrix.image == 'Wii' }}
       with:
-        name: VbaGX
+        name: VbaGX-world
         path: |
          dist/VbaGX/
 
@@ -104,7 +104,7 @@ jobs:
 
     - name: Re-zip artifacts
       run: |
-        cd dist/VbaGX
+        cd dist/VbaGX-world
         zip -r VbaGX.2.4.8.world.zip ./apps ./vbagx
         # zip -r VbaGX-GameCube.zip VbaGX-GameCube
 
@@ -121,4 +121,4 @@ jobs:
         removeArtifacts: true
         replacesArtifacts: false
         tag: Pre-release
-        artifacts: "dist/VbaGX/*.zip"
+        artifacts: "dist/VbaGX-world/*.zip"

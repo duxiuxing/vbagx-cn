@@ -3,12 +3,12 @@
   <name>Visual Boy Advance GX</name>
   <coder>Tantric, R-Sam</coder>
   <version>2.4.8.world</version>
-  <release_date>20240330</release_date>
+  <release_date>2024/3/30</release_date>
   <short_description>GBA/GBC/GB Emulator</short_description>
-  <long_description>Website: https://github.com/duxiuxing/vbagx-cn
-
-1. A port of Visual Boy Advance - M to the Wii;
+  <long_description>1. A port of Visual Boy Advance - M to the Wii;
 2. Use of English as the default UI language;
-3. Support multi-language, such as Japanese, German, French, Spanish, Italian, Dutch, Chinese (Simplified and Traditional), Korean, Portuguese, Brazilian Portuguese, Catalan, Turkish, Swedish.</long_description>
+3. Support multi-language, such as Japanese, German, French, Spanish, Italian, Dutch, Chinese (Simplified and Traditional), Korean, Portuguese, Brazilian Portuguese, Catalan, Turkish, Swedish.
+
+Website: https://github.com/duxiuxing/vbagx-cn</long_description>
   <ahb_access />
 </app>
