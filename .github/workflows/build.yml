@@ -62,7 +62,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: ${{ matrix.image == 'Wii' }}
       with:
-        name: VbaGX.2.4.8.hk
+        name: VbaGX-hk
         path: |
          dist/VbaGX/
 
@@ -89,7 +89,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     needs: [build]
-    if: github.ref == 'refs/heads/world'
+    if: github.ref == 'refs/heads/hk'
 
     steps:
     - name: Checkout vbagx repo
@@ -104,8 +104,8 @@ jobs:
 
     - name: Re-zip artifacts
       run: |
-        cd dist/VbaGX
-        zip -r VbaGX.2.4.8.world.zip ./apps ./vbagx
+        cd dist/VbaGX-hk
+        zip -r VbaGX.2.4.8.hk.zip ./apps ./vbagx
         # zip -r VbaGX-GameCube.zip VbaGX-GameCube
 
     - name: Update Git Tag
@@ -121,4 +121,4 @@ jobs:
         removeArtifacts: true
         replacesArtifacts: false
         tag: Pre-release
-        artifacts: "dist/VbaGX/*.zip"
+        artifacts: "dist/VbaGX-hk/*.zip"
