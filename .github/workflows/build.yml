@@ -41,7 +41,8 @@ jobs:
         # cp fonts/en.ttf dist/VbaGX/apps/vbagx/
         # cp fonts/jp.ttf dist/VbaGX/apps/vbagx/
         # cp fonts/ko.ttf dist/VbaGX/apps/vbagx/
-        # cp fonts/zh.ttf dist/VbaGX/apps/vbagx/
+        # cp fonts/zh_cn.ttf dist/VbaGX/apps/vbagx/
+        # cp fonts/zh_hk.ttf dist/VbaGX/apps/vbagx/
         cp hbc/icon.png dist/VbaGX/apps/vbagx/
         cp hbc/meta.xml dist/VbaGX/apps/vbagx/
         ##### ./vbagx  #####
