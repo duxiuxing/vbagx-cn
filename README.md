@@ -1,11 +1,12 @@
 # Visual Boy Advance GX
 
-- master 分支用于同步 dborth/vbagx 的代码；
-- world 分支是基于 master 分支拉取的
-- hk 分支是基于 world 分支拉取的，用于构建繁体中文版；
-- cn 分支是基于 world 分支拉取的，用于构建简体中文版；
-- [VBA GX 中文版简介](./doc/README.md)
 
+- 各个分支说明：
+  1. master 分支用于同步 dborth/vbagx 的代码；
+  2. world 分支是基于 master 分支拉取的，用于构建世界版，支持多语言；
+  3. hk 分支是基于 world 分支拉取的，用于构建繁体中文版；
+  4. cn 分支是基于 world 分支拉取的，用于构建简体中文版；
+- [VBA GX 中文版简介](./doc/README.md)
 
 ---
 
