@@ -310,6 +310,12 @@ msgstr "找不到字體檔！"
 msgid "French"
 msgstr "法語"
 
+msgid "From .png file"
+msgstr "從 .png 檔讀取"
+
+msgid "From game (SGB only)"
+msgstr "從遊戲讀取"
+
 msgid "Game Genie"
 msgstr "遊戲金手指"
 
@@ -357,6 +363,9 @@ msgstr "德語"
 
 msgid "Go Back"
 msgstr "返回"
+
+msgid "Green Screen"
+msgstr "綠色屏幕"
 
 msgid "Hardware (GB/GBC)"
 msgstr "硬體（GB/GBC）"
@@ -510,6 +519,9 @@ msgstr "減號鍵"
 
 msgid "MINUS"
 msgstr "-"
+
+msgid "Monochrome Screen"
+msgstr "單色屏幕"
 
 msgid "Music Volume"
 msgstr "音樂音量"
@@ -914,7 +926,7 @@ msgid "Stretch to Fit"
 msgstr "適當的伸縮"
 
 msgid "Super Game Boy border"
-msgstr "GB 的邊緣"
+msgstr "Super Game Boy 的邊框"
 
 msgid "Super Scope"
 msgstr "超任光槍"
