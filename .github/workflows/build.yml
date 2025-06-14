@@ -105,9 +105,17 @@ jobs:
 
     - name: Re-zip artifacts
       run: |
-        cd dist/VbaGX-world
-        zip -r VbaGX.2.4.8.world.zip ./apps ./vbagx
-        # zip -r VbaGX-GameCube.zip VbaGX-GameCube
+        cd dist
+        cd VisualBoyAdvanceGX-world
+        rm -r vbagx/artwork/*
+        rm -r vbagx/cheats/*
+        rm -r vbagx/covers/*
+        rm -r vbagx/roms/*
+        rm -r vbagx/saves/*
+        rm -r vbagx/screenshots/*
+        zip -r ../VisualBoyAdvanceGX-v2.4.9.world.zip *
+        # cd ../VisualBoyAdvanceGX-GameCube
+        # zip -r ../VisualBoyAdvanceGX-GameCube.zip *
 
     - name: Update Git Tag
       run: |
@@ -122,4 +130,4 @@ jobs:
         removeArtifacts: true
         replacesArtifacts: false
         tag: Pre-release
-        artifacts: "dist/VbaGX-world/*.zip"
+        artifacts: "dist/*.zip"

@@ -2,8 +2,8 @@
 <app version="1">
   <name>Visual Boy Advance GX</name>
   <coder>Tantric, R-Sam</coder>
-  <version>2.4.8.world</version>
-  <release_date>2024/3/30</release_date>
+  <version>2.4.9.world</version>
+  <release_date>20250518</release_date>
   <short_description>GBA/GBC/GB Emulator</short_description>
   <long_description>1. A port of Visual Boy Advance - M to the Wii;
 2. Use of English as the default UI language;
