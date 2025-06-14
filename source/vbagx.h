@@ -17,7 +17,7 @@
 #include "utils/FreeTypeGX.h"
 
 #define APPNAME 		"Visual Boy Advance GX"
-#define APPVERSION 		"2.4.8"
+#define APPVERSION 		"2.4.9"
 #define APPFOLDER 		"vbagx"
 #define PREF_FILE_NAME 	"settings.xml"
 #define PAL_FILE_NAME 	"palettes.xml"
@@ -25,8 +25,8 @@
 #define NOTSILENT 0
 #define SILENT 1
 
-const char pathPrefix[9][8] =
-{ "", "sd:/", "usb:/", "dvd:/", "smb:/", "carda:/", "cardb:/", "port2:/" };
+const char pathPrefix[10][11] =
+{ "", "sd:/", "usb:/", "dvd:/", "smb:/", "carda:/", "cardb:/", "port2:/", "gcloader:/" };
 
 enum 
 {
@@ -37,7 +37,8 @@ enum
 	DEVICE_SMB,
 	DEVICE_SD_SLOTA,
 	DEVICE_SD_SLOTB,
-	DEVICE_SD_PORT2
+	DEVICE_SD_PORT2,
+	DEVICE_SD_GCLOADER,
 };
 
 enum 
