@@ -106,16 +106,16 @@ jobs:
     - name: Re-zip artifacts
       run: |
         cd dist
-        cd VisualBoyAdvanceGX-world
+        cd VbaGX-world
         rm -r vbagx/artwork/*
         rm -r vbagx/cheats/*
         rm -r vbagx/covers/*
         rm -r vbagx/roms/*
         rm -r vbagx/saves/*
         rm -r vbagx/screenshots/*
-        zip -r ../VisualBoyAdvanceGX-v2.4.9.world.zip *
-        # cd ../VisualBoyAdvanceGX-GameCube
-        # zip -r ../VisualBoyAdvanceGX-GameCube.zip *
+        zip -r ../VbaGX-v2.4.9.world.zip *
+        # cd ../VbaGX-GameCube
+        # zip -r ../VbaGX-GameCube.zip *
 
     - name: Update Git Tag
       run: |
