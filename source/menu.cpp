@@ -3378,7 +3378,7 @@ static int MenuSettingsEmulation()
 
 	GuiOptionBrowser optionBrowser(552, 248, &options);
 	optionBrowser.SetPosition(0, 108);
-	optionBrowser.SetCol2Position(240);
+	optionBrowser.SetCol2Position(275);
 	optionBrowser.SetAlignment(ALIGN_CENTRE, ALIGN_TOP);
 
 	HaltGui();
