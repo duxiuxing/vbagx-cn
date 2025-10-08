@@ -113,7 +113,7 @@ jobs:
         rm -r vbagx/roms/*
         rm -r vbagx/saves/*
         rm -r vbagx/screenshots/*
-        zip -r ../VbaGX-v2.4.9.hk.zip *
+        zip -r ../VbaGX-v2.5.0.hk.zip *
         # cd ../VbaGX-GameCube
         # zip -r ../VbaGX-GameCube.zip *
 
