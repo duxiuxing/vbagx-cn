@@ -94,9 +94,7 @@ static camera cam = { {0.0F, 0.0F, 0.0F},
 /****************************************************************************
  * VideoThreading
  ***************************************************************************/
-#define TSTACK 16384
 static lwp_t vbthread;
-static unsigned char vbstack[TSTACK];
 
 /****************************************************************************
  * vbgetback
@@ -168,7 +166,7 @@ static inline void draw_init(void)
 	GX_InitTexObj(&texobj, texturemem, vwidth, vheight, GX_TF_RGB565,
 		GX_CLAMP, GX_CLAMP, GX_FALSE);
 	if (GCSettings.render == 2)
-		GX_InitTexObjLOD(&texobj,GX_NEAR,GX_NEAR_MIP_NEAR,2.5,9.0,0.0,GX_FALSE,GX_FALSE,GX_ANISO_1); // original/unfiltered video mode: force texture filtering OFF
+		GX_InitTexObjFilterMode(&texobj,GX_NEAR,GX_NEAR); // original/unfiltered video mode: force texture filtering OFF
 }
 
 static inline void draw_vert(u8 pos, u8 c, f32 s, f32 t)
@@ -254,7 +252,7 @@ static inline void draw_cursor(Mtx v)
 	GX_InitTexObj(&texobj, texturemem, vwidth, vheight, GX_TF_RGB565,
 		GX_CLAMP, GX_CLAMP, GX_FALSE);
 	if (GCSettings.render == 2)
-		GX_InitTexObjLOD(&texobj,GX_NEAR,GX_NEAR_MIP_NEAR,2.5,9.0,0.0,GX_FALSE,GX_FALSE,GX_ANISO_1); // original/unfiltered video mode: force texture filtering OFF
+		GX_InitTexObjFilterMode(&texobj,GX_NEAR,GX_NEAR); // original/unfiltered video mode: force texture filtering OFF
 }
 #endif
 
@@ -268,7 +266,7 @@ void StopGX()
 	GX_AbortFrame();
 	GX_Flush();
 
-	VIDEO_SetBlack(TRUE);
+	VIDEO_SetBlack(true);
 	VIDEO_Flush();
 }
 
@@ -305,20 +303,11 @@ static GXRModeObj * FindVideoMode()
 			break;
 		default:
 			mode = VIDEO_GetPreferredMode(NULL);
-
-			#ifdef HW_DOL
-			/* we have component cables, but the preferred mode is interlaced
-			 * why don't we switch into progressive?
-			 * on the Wii, the user can do this themselves on their Wii Settings */
-			if(VIDEO_HaveComponentCable())
-				mode = &TVNtsc480Prog;
-			#endif
-
 			break;
 	}
 
 	// check for progressive scan
-	if (mode->viTVMode == VI_TVMODE_NTSC_PROG)
+	if ((mode->viTVMode & 3) == VI_PROGRESSIVE)
 		progressive = true;
 	else
 		progressive = false;
@@ -363,15 +352,9 @@ static void SetupVideoMode(GXRModeObj * mode)
 	VIDEO_ClearFrameBuffer (mode, xfb[1], COLOR_BLACK);
 	VIDEO_SetNextFramebuffer (xfb[0]);
 
-	VIDEO_SetBlack (FALSE);
+	VIDEO_SetBlack (false);
 	VIDEO_Flush ();
-	VIDEO_WaitVSync ();
-		
-	if (mode->viTVMode & VI_NON_INTERLACE)
-		VIDEO_WaitVSync();
-	else
-		while (VIDEO_GetNextField())
-			VIDEO_WaitVSync();
+	VIDEO_WaitForFlush ();
 	
 	VIDEO_SetPostRetraceCallback ((VIRetraceCallback)copy_to_xfb);
 	vmode = mode;
@@ -400,13 +383,13 @@ InitializeVideo ()
 	GXRModeObj *rmode = FindVideoMode();
 	SetupVideoMode(rmode);
 
-	LWP_CreateThread (&vbthread, vbgetback, NULL, vbstack, TSTACK, 68);
+	LWP_CreateThread (&vbthread, vbgetback, NULL, NULL, 0, 68);
 
 	// Initialise GX
 	GXColor background = { 0, 0, 0, 0xff };
 	memset (gp_fifo, 0, DEFAULT_FIFO_SIZE);
 	GX_Init (&gp_fifo, DEFAULT_FIFO_SIZE);
-	GX_SetCopyClear (background, 0x00ffffff);
+	GX_SetCopyClear (background, GX_MAX_Z24);
 	GX_SetDispCopyGamma (GX_GM_1_0);
 	GX_SetCullMode (GX_CULL_NONE);
 }
@@ -569,7 +552,7 @@ ResetVideo_Emu ()
 	GX_InvalidateTexAll ();
 	GX_InitTexObj (&texobj, texturemem, vwidth, vheight, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);	// initialize the texture obj we are going to use
 	if (GCSettings.render == 2)
-		GX_InitTexObjLOD(&texobj,GX_NEAR,GX_NEAR_MIP_NEAR,2.5,9.0,0.0,GX_FALSE,GX_FALSE,GX_ANISO_1); // original/unfiltered video mode: force texture filtering OFF
+		GX_InitTexObjFilterMode(&texobj,GX_NEAR,GX_NEAR); // original/unfiltered video mode: force texture filtering OFF
 
 	GX_Flush();
 	draw_init();
@@ -792,7 +775,7 @@ ResetVideo_Menu ()
 
 	// clears the bg to color and clears the z buffer
 	GXColor background = {0, 0, 0, 255};
-	GX_SetCopyClear (background, 0x00ffffff);
+	GX_SetCopyClear (background, GX_MAX_Z24);
 
 	yscale = GX_GetYScaleFactor(vmode->efbHeight,vmode->xfbHeight);
 	xfbHeight = GX_SetDispCopyYScale(yscale);
@@ -854,7 +837,7 @@ void Menu_Render()
 	GX_DrawDone();
 	VIDEO_SetNextFramebuffer(xfb[whichfb]);
 	VIDEO_Flush();
-	VIDEO_WaitVSync();
+	VIDEO_WaitForFlush();
 }
 
 /****************************************************************************
