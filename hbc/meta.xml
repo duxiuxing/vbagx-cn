@@ -10,6 +10,6 @@
 - Support rom files named in Simplified Chinese
 
 Website: https://github.com/duxiuxing/vbagx-cn</long_description>
-  <no_ios_reload/>
+  <no_ios_reload />
   <ahb_access />
 </app>
