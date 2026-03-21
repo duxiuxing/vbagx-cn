@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <app version="1">
   <name>Visual Boy Advance GX</name>
-  <coder>Tantric, R-Sam</coder>
+  <coder>Tantric &amp; R-Sam</coder>
   <version>2.5.0.hk</version>
-  <release_date>20250730</release_date>
+  <release_date>2025-07-30</release_date>
   <short_description>GBA/GBC/GB Emulator</short_description>
-  <long_description>1. A port of Visual Boy Advance - M to the Wii;
-2. Use of Traditional Chinese as the UI language;
-3. Support rom files named in Chinese (Simplified and Traditional).
+  <long_description>- A port of Visual Boy Advance - M to the Wii
+- Use of Traditional Chinese as the default UI language
+- Support rom files named in Traditional Chinese
 
 Website: https://github.com/duxiuxing/vbagx-cn</long_description>
+  <no_ios_reload/>
   <ahb_access />
 </app>
