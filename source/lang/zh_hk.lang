@@ -28,12 +28,6 @@ msgstr "A（連發）"
 msgid "Additional coding"
 msgstr "額外的編碼"
 
-msgid "Aim Offscreen"
-msgstr "不顯示瞄準準星"
-
-msgid "An update is available!"
-msgstr "有一個新的版本！"
-
 msgid "Append Auto to .SAV Files"
 msgstr "自動添加到 .SAV 文件"
 
@@ -51,9 +45,6 @@ msgstr "插圖"
 
 msgid "Artwork Folder"
 msgstr "插圖目錄"
-
-msgid "AspiringSquire's Real palette"
-msgstr "AspiringSquire 的真實調色板"
 
 msgid "Attempting to determine load device..."
 msgstr "正在試圖從設備中讀取…"
@@ -136,9 +127,6 @@ msgstr "傳統控制器"
 msgid "Close"
 msgstr "關閉"
 
-msgid "Coding"
-msgstr "編碼"
-
 msgid "Coding & menu design"
 msgstr "編碼 & 功能表設計"
 
@@ -148,23 +136,14 @@ msgstr "不支援壓縮的 GBA 檔！"
 msgid "Connecting to network share..."
 msgstr "正在連接網路共用檔…"
 
-msgid "Controles"
-msgstr "控制裝置"
-
 msgid "Controller"
 msgstr "控制器"
-
-msgid "Cover View"
-msgstr "封面預覽"
 
 msgid "Covers"
 msgstr "封面"
 
 msgid "Covers Folder"
 msgstr "封面目錄"
-
-msgid "CrashMan's palette"
-msgstr "CrashMan 的調色板"
 
 msgid "Credits"
 msgstr "作者資訊"
@@ -195,9 +174,6 @@ msgstr "關閉"
 
 msgid "DISABLED"
 msgstr "關閉"
-
-msgid "Display Virtual Memory"
-msgstr "顯示虛擬記憶體"
 
 msgid "distributed, or modified under the terms of the"
 msgstr "在以下的條件下發佈、修改"
@@ -412,9 +388,6 @@ msgstr "無效的保存檔"
 msgid "Invalid state file"
 msgstr "無效的狀態檔"
 
-msgid "IOS: %d"
-msgstr "IOS：%d"
-
 msgid "Italian"
 msgstr "義大利語"
 
@@ -481,9 +454,6 @@ msgstr "讀取中…"
 msgid "Logo"
 msgstr "圖形標識"
 
-msgid "Loopy's palette"
-msgstr "Loopy 的調色板"
-
 msgid "Main developer"
 msgstr "主要開發人員"
 
@@ -499,9 +469,6 @@ msgstr "匹配 GC 控制器"
 msgid "Match Wii Controls"
 msgstr "匹配 Wii 控制器"
 
-msgid "Matthew Conte's palette"
-msgstr "Matthew Conte 的調色板"
-
 msgid "Maximum filepath length reached!"
 msgstr "檔路徑長度達到最大！"
 
@@ -513,9 +480,6 @@ msgstr "功能表圖片"
 
 msgid "Menu sound"
 msgstr "功能表音樂"
-
-msgid "MESS palette"
-msgstr "MESS 調色板"
 
 msgid "Minus"
 msgstr "減號鍵"
@@ -610,9 +574,6 @@ msgstr "開啟"
 msgid "Original"
 msgstr "原始"
 
-msgid "Original FCE"
-msgstr "最初版的 FCE"
-
 msgid "Out of memory!"
 msgstr "記憶體不足！"
 
@@ -648,9 +609,6 @@ msgstr "調色板保存了"
 
 msgid "Partial Stretch"
 msgstr "部分拉伸"
-
-msgid "PasoFami/99 palette"
-msgstr "PasoFami/99 調色板"
 
 msgid "Pause"
 msgstr "暫停"
@@ -699,9 +657,6 @@ msgstr "退出遊戲"
 
 msgid "Quit this game? Any unsaved progress will be lost."
 msgstr "退出遊戲嗎？未保存的進度將丟失。"
-
-msgid "Quor's palette"
-msgstr "Quor 的調色板"
 
 msgid "R TRIG"
 msgstr "R 扳機"
@@ -771,9 +726,6 @@ msgstr "保存的目錄"
 
 msgid "Save Game"
 msgstr "保存遊戲"
-
-msgid "Save RAM and State?"
-msgstr "保存 RAM 和狀態嗎？"
 
 msgid "Save SRAM and State?"
 msgstr "保存 SRAM 和狀態嗎？"
@@ -892,9 +844,6 @@ msgstr "超任滑鼠 - GameCube 控制器"
 msgid "SNES Mouse - Wiimote"
 msgstr "超任滑鼠 - Wii 右手柄"
 
-msgid "Snes9x - Copyright (c) Snes9x Team 1996 - 2023"
-msgstr "Snes9x - 版權（C）Snes9x 開發小組 1996 - 2023"
-
 msgid "Snes9x GX GameCube"
 msgstr "GitHub 上的項目"
 
@@ -906,9 +855,6 @@ msgstr "效果音的音量"
 
 msgid "Spanish"
 msgstr "西班牙語"
-
-msgid "Sprite Limit"
-msgstr "畫面限制"
 
 msgid "SRAM file not found"
 msgstr "未找到 SRAM 文件"
@@ -1051,15 +997,6 @@ msgstr "VM32：未知的頁面型態！"
 msgid "VM8: Unknown page type!"
 msgstr "VM8：未知的頁面型態！"
 
-msgid "VS Castlevania palette"
-msgstr "VS Castlevania 調色板"
-
-msgid "VS Dr. Mario palette"
-msgstr "VS Dr. Mario 調色板"
-
-msgid "VS SMB/VS Ice Climber palette"
-msgstr "VS SMB/VS Ice Climber 調色板"
-
 msgid "Wii U Pro Controller"
 msgstr "Wii U Pro 控制器"
 
@@ -1069,17 +1006,8 @@ msgstr "Wii 右手柄"
 msgid "Wiimote Orientation"
 msgstr "Wii 右手柄方向"
 
-msgid "WiiU Pro controller"
-msgstr "WiiU Pro 控制器"
-
 msgid "Yes"
 msgstr "是"
-
-msgid "Zaphod's VS Castlevania palette"
-msgstr "Zaphod's VS Castlevania 調色板"
-
-msgid "Zaphod's VS SMB palette"
-msgstr "Zaphod's VS SMB 調色板"
 
 msgid "Zapper"
 msgstr "光槍"
