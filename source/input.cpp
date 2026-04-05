@@ -31,6 +31,13 @@
 #include "vba/gba/bios.h"
 #include "vba/gba/GBAinline.h"
 
+#ifdef HW_RVL
+#include "utils/retrode.h"
+#include "utils/xbox360.h"
+#include "utils/hornet.h"
+#include "utils/mayflash.h"
+#endif
+
 #define ANALOG_SENSITIVITY 30
 
 int rumbleRequest[4] = {0,0,0,0};
@@ -173,6 +180,10 @@ UpdatePads()
 {
 	#ifdef HW_RVL
 	WiiDRC_ScanPads();
+	Retrode_ScanPads();
+	XBOX360_ScanPads();
+	Hornet_ScanPads();
+	Mayflash_ScanPads();
 	WPAD_ScanPads();
 	#endif
 
@@ -895,6 +906,11 @@ static u32 DecodeJoy(unsigned short pad)
 	int wpad_exp_type = userInput[pad].wpad->exp.type;
 	bool isWUPC = userInput[pad].wpad->exp.classic.type == 2;
 
+	pad_btns_h |= Retrode_ButtonsHeld(chan);
+    pad_btns_h |= XBOX360_ButtonsHeld(chan);
+	pad_btns_h |= Hornet_ButtonsHeld(chan);
+	pad_btns_h |= Mayflash_ButtonsHeld(chan);
+
 	if(wpad_exp_type == WPAD_EXP_NONE)
 	{ // wiimote
 
@@ -1006,3 +1022,60 @@ u32 GetJoy(int pad)
 
 	return J;
 }
+
+#ifdef HW_RVL
+char* GetUSBControllerInfo()
+{
+    static char info[100];
+	strcpy(info, "USB Controller: not connected");
+
+	bool first_device = true;
+	char connected[] = "connected";
+	
+	if (strcmp(Retrode_Status(), connected) == 0)
+	{
+		if (first_device)
+		{
+			strcpy(info, "Retrode: connected");
+			first_device = false;
+		}
+		else
+			strcat(info, ", Retrode: connected");
+	}
+
+	if (strcmp(XBOX360_Status(), connected) == 0)
+	{
+		if (first_device)
+		{
+			strcpy(info, "XBOX360: connected");
+			first_device = false;
+		}
+		else
+			strcat(info, ", XBOX360: connected");
+	}
+
+	if (strcmp(Hornet_Status(), connected) == 0)
+	{
+		if (first_device)
+		{
+			strcpy(info, "Hornet: connected");
+			first_device = false;
+		}
+		else
+			strcat(info, ", Hornet: connected");
+	}
+
+	if (strcmp(Mayflash_Status(), connected) == 0)
+	{
+		if (first_device)
+		{
+			strcpy(info, "Mayflash: connected");
+			first_device = false;
+		}
+		else
+			strcat(info, ", Mayflash: connected");
+	}
+
+	return info;
+}
+#endif

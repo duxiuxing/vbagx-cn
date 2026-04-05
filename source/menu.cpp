@@ -822,7 +822,7 @@ static void WindowCredits(void * ptr)
 	creditsBoxImg.SetAlignment(ALIGN_CENTRE, ALIGN_MIDDLE);
 	creditsWindowBox.Append(&creditsBoxImg);
 
-	int numEntries = 24;
+	int numEntries = 25;
 	GuiText * txt[numEntries];
 
 	txt[i] = new GuiText("Credits", 20, (GXColor){0, 0, 0, 255});
@@ -878,6 +878,7 @@ static void WindowCredits(void * ptr)
 
 	char wiiDetails[30];
 	char wiiInfo[20];
+	char controllerInfo[100];
 
 #ifdef HW_RVL
 	if(!IsWiiU()) {
@@ -890,8 +891,12 @@ static void WindowCredits(void * ptr)
 		sprintf(wiiInfo, "vWii (729 MHz)");
 	}
 	sprintf(wiiDetails, "IOS: %d / %s", IOS_GetVersion(), wiiInfo);
+	sprintf(controllerInfo, GetUSBControllerInfo());
 #endif
 
+	txt[i] = new GuiText(controllerInfo, 14, (GXColor) { 0, 0, 0, 255 });
+	txt[i]->SetAlignment(ALIGN_LEFT, ALIGN_BOTTOM);
+	txt[i]->SetPosition(20, -46); i++;
 	txt[i] = new GuiText(wiiDetails, 14, (GXColor){0, 0, 0, 255});
 	txt[i]->SetAlignment(ALIGN_RIGHT, ALIGN_BOTTOM);
 	txt[i]->SetPosition(-20, -46); i++;
