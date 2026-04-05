@@ -906,10 +906,10 @@ static u32 DecodeJoy(unsigned short pad)
 	int wpad_exp_type = userInput[pad].wpad->exp.type;
 	bool isWUPC = userInput[pad].wpad->exp.classic.type == 2;
 
-	pad_btns_h |= Retrode_ButtonsHeld(chan);
-    pad_btns_h |= XBOX360_ButtonsHeld(chan);
-	pad_btns_h |= Hornet_ButtonsHeld(chan);
-	pad_btns_h |= Mayflash_ButtonsHeld(chan);
+	pad_btns_h |= Retrode_ButtonsHeld(pad);
+    pad_btns_h |= XBOX360_ButtonsHeld(pad);
+	pad_btns_h |= Hornet_ButtonsHeld(pad);
+	pad_btns_h |= Mayflash_ButtonsHeld(pad);
 
 	if(wpad_exp_type == WPAD_EXP_NONE)
 	{ // wiimote
