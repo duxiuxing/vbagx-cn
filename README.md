@@ -55,6 +55,10 @@ With it you can play GBA/Game Boy Color/Game Boy games on your Wii/GameCube.
 
 ## UPDATE HISTORY
 
+[2.5.1 - April 13, 2026]
+
+* Compiled with latest devkitPPC/libogc2
+
 [2.5.0 - July 30, 2025]
 
 * Added GC Loader support (mrysav)
