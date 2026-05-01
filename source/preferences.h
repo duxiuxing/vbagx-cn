@@ -10,6 +10,7 @@
 
 bool SavePrefs (bool silent);
 bool LoadPrefs ();
+void CreateMissingDirectories();
 void FixInvalidSettings();
 void DefaultSettings ();
 bool SavePalettes (bool silent);
