@@ -700,8 +700,7 @@ SavePrefs (bool silent)
 	int offset = 0;
 	int device = DEVICE_AUTO;
 	
-	if(prefpath[0] != 0)
-	{
+	if(prefpath[0] != 0) {
 		sprintf(filepath, "%s/%s", prefpath, PREF_FILE_NAME);
 		FindDevice(filepath, &device);
 	}
@@ -750,6 +749,9 @@ SavePrefs (bool silent)
 	{
 		if (!silent)
 			InfoPrompt("Preferences saved");
+
+		if(appPath[0] == 0)
+			strcpy(appPath, prefpath);
 		return true;
 	}
 	return false;
