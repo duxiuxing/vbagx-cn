@@ -229,10 +229,6 @@ bool LoadLanguage()
 		case LANG_SWEDISH: file = (char *)sv_lang; eof = file + sv_lang_size; break;
 		default: return false;
 	}
-#else
-	// LANG_DEFAULT = LANG_SIMP_CHINESE
-	file = (char*)zh_lang;
-	eof = file + zh_lang_size;
 #endif
 
 	gettextCleanUp();

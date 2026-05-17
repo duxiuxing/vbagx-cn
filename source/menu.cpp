@@ -137,27 +137,7 @@ void ChangeLanguage() {
 		return;
 	}
 
-	bool needLoadFont = false;
-	if (LANG_SIMP_CHINESE == LANG_DEFAULT
-		|| LANG_TRAD_CHINESE == LANG_DEFAULT
-		|| LANG_JAPANESE == LANG_DEFAULT
-		|| LANG_KOREAN == LANG_DEFAULT) {
-		if (GCSettings.Language() == LANG_DEFAULT)
-			needLoadFont = false;
-		else
-			needLoadFont = true;
-	}
-	else {
-		if (LANG_SIMP_CHINESE == GCSettings.Language()
-			|| LANG_TRAD_CHINESE == GCSettings.Language()
-			|| LANG_JAPANESE == GCSettings.Language()
-			|| LANG_KOREAN == GCSettings.Language())
-			needLoadFont = true;
-		else
-			needLoadFont = false;
-	}
-
-	if (needLoadFont) {
+	if(GCSettings.Language() == LANG_JAPANESE || GCSettings.Language() == LANG_KOREAN || GCSettings.Language() == LANG_SIMP_CHINESE) {
 #ifdef HW_RVL
 		char filepath[MAXPATHLEN];
 
@@ -3969,8 +3949,6 @@ static int MenuSettingsMenu()
 			case 5:
 			{
 				int value = GCSettings.Language() + 1;
-				if (value >= LANG_LENGTH)
-					value = LANG_DEFAULT;
 				GCSettings.SetLanguage(value);
 				break;
 			}
@@ -4970,8 +4948,8 @@ MainMenu (int menu)
 
 		if(!SupportedIOS(ios))
 			ErrorPrompt("The current IOS is unsupported. Functionality and/or stability may be adversely affected.");
-		// else if(!SaneIOS(ios))
-		//	ErrorPrompt("The current IOS has been altered (fake-signed). Functionality and/or stability may be adversely affected.");
+		else if(!SaneIOS(ios))
+			ErrorPrompt("The current IOS has been altered (fake-signed). Functionality and/or stability may be adversely affected.");
 	}
 #endif
 

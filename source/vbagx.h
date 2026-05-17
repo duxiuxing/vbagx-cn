@@ -130,19 +130,15 @@ struct SGCSettings
 
 #ifdef MULTI_LANGUAGES_SUPPORT
 private:
-	int 	language;
+	int 	curLanguage;
 public:
-	int Language() { return language; }
+	int Language() { return curLanguage; }
 	void SetLanguage(int value)
 	{
 		if (value < 0 || value >= LANG_LENGTH)
 			value = LANG_DEFAULT;
-		language = value;
-
+		curLanguage = value;
 	}
-#else
-	int Language() { return LANG_DEFAULT; }
-	void SetLanguage(int value) {}
 #endif
 
 	int		PreviewImage;
