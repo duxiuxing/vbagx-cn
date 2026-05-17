@@ -149,7 +149,7 @@ public:
 		curLanguage = value;
 	}
 #elif defined(ZHCN_LANGUAGE_ONLY)
-	int Language() { return curLanguage; }
+	int Language() { return LANG_SIMP_CHINESE; }
 	void SetLanguage(int value) {}
 #endif
 
