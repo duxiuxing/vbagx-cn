@@ -134,7 +134,12 @@ private:
 	int 	curLanguage;
 public:
 #ifdef MULTI_LANGUAGES_SUPPORT
-	int Language() { return curLanguage; }
+	int Language()
+	{
+		if (curLanguage < 0 || curLanguage >= LANG_LENGTH)
+			curLanguage = LANG_DEFAULT;
+		return curLanguage;
+	}
 	void SetLanguage(int value)
 	{
 		if (value < 0 || value >= LANG_LENGTH)
