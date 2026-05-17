@@ -703,6 +703,9 @@ msgstr "重置设置"
 msgid "Reset this game? Any unsaved progress will be lost."
 msgstr "确定要重启游戏吗？ 未保存的进度会全部丢失。"
 
+msgid "Retrode: connected"
+msgstr "Retrode 适配器：已连接"
+
 msgid "Retry"
 msgstr "重试"
 
@@ -993,6 +996,9 @@ msgstr "更新成功！"
 
 msgid "USB"
 msgstr "USB 设备"
+
+msgid "USB Controller: not connected"
+msgstr "USB 控制器：未连接"
 
 msgid "USB drive not found!"
 msgstr "没有找到 USB 设备！"
