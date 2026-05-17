@@ -98,7 +98,9 @@ enum
 	LANG_TURKISH,
 	LANG_SWEDISH,
 	LANG_LENGTH,
+#ifdef MULTI_LANGUAGES_SUPPORT
 	LANG_DEFAULT = LANG_ENGLISH
+#endif
 };
 
 struct SGCSettings
@@ -128,10 +130,10 @@ struct SGCSettings
 	int		SFXVolume;
 	int		Rumble;
 
-#ifdef MULTI_LANGUAGES_SUPPORT
 private:
 	int 	curLanguage;
 public:
+#ifdef MULTI_LANGUAGES_SUPPORT
 	int Language() { return curLanguage; }
 	void SetLanguage(int value)
 	{
