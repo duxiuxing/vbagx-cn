@@ -151,9 +151,9 @@ void ChangeLanguage() {
 			case LANG_SIMP_CHINESE:
 				sprintf(filepath, "%s/zh_cn.ttf", appPath);
 				break;
-			case LANG_TRAD_CHINESE:
-				sprintf(filepath, "%s/zh_hk.ttf", appPath);
-				break;
+//			case LANG_TRAD_CHINESE:
+//				sprintf(filepath, "%s/zh_hk.ttf", appPath);
+//				break;
 			default:
 				sprintf(filepath, "%s/en.ttf", appPath);
 				break;
@@ -4016,7 +4016,7 @@ static int MenuSettingsMenu()
 				case LANG_ITALIAN:		sprintf(options.value[5], "Italian"); break;
 				case LANG_DUTCH:		sprintf(options.value[5], "Dutch"); break;
 				case LANG_SIMP_CHINESE:	sprintf(options.value[5], "Chinese (Simplified)"); break;
-				case LANG_TRAD_CHINESE:	sprintf(options.value[5], "Chinese (Traditional)"); break;
+//				case LANG_TRAD_CHINESE:	sprintf(options.value[5], "Chinese (Traditional)"); break;
 				case LANG_KOREAN:		sprintf(options.value[5], "Korean"); break;
 				case LANG_PORTUGUESE:	sprintf(options.value[5], "Portuguese"); break;
 				case LANG_BRAZILIAN_PORTUGUESE: sprintf(options.value[5], "Brazilian Portuguese"); break;

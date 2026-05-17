@@ -27,7 +27,7 @@
 #include "it_lang.h"
 #include "nl_lang.h"
 #include "zh_lang.h"
-#include "zh_hk_lang.h"
+//#include "zh_hk_lang.h"
 #include "ko_lang.h"
 #include "pt_lang.h"
 #include "pt_br_lang.h"
