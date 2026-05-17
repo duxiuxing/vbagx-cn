@@ -98,7 +98,11 @@ enum
 	LANG_TURKISH,
 	LANG_SWEDISH,
 	LANG_LENGTH,
+#ifdef MULTI_LANGUAGES_SUPPORT
+	LANG_DEFAULT = LANG_ENGLISH
+#elif defined(ZHCN_LANGUAGE_ONLY)
 	LANG_DEFAULT = LANG_SIMP_CHINESE
+#endif
 };
 
 struct SGCSettings
@@ -128,10 +132,10 @@ struct SGCSettings
 	int		SFXVolume;
 	int		Rumble;
 
-#ifdef MULTI_LANGUAGES_SUPPORT
 private:
 	int 	curLanguage;
 public:
+#ifdef MULTI_LANGUAGES_SUPPORT
 	int Language() { return curLanguage; }
 	void SetLanguage(int value)
 	{
@@ -139,6 +143,9 @@ public:
 			value = LANG_DEFAULT;
 		curLanguage = value;
 	}
+#elif defined(ZHCN_LANGUAGE_ONLY)
+	int Language() { return curLanguage; }
+	void SetLanguage(int value) {}
 #endif
 
 	int		PreviewImage;
