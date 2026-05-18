@@ -90,17 +90,14 @@ enum
 	LANG_ITALIAN,
 	LANG_DUTCH,
 	LANG_SIMP_CHINESE,
+	LANG_TRAD_CHINESE,
 	LANG_KOREAN,
 	LANG_PORTUGUESE,
 	LANG_BRAZILIAN_PORTUGUESE,
 	LANG_CATALAN,
 	LANG_TURKISH,
 	LANG_SWEDISH,
-//	LANG_TRAD_CHINESE,
-	LANG_LENGTH,
-#ifdef MULTI_LANGUAGES_SUPPORT
-	LANG_DEFAULT = LANG_ENGLISH
-#endif
+	LANG_LENGTH
 };
 
 struct SGCSettings
@@ -129,25 +126,7 @@ struct SGCSettings
 	int		MusicVolume;
 	int		SFXVolume;
 	int		Rumble;
-
-private:
-	int 	curLanguage;
-public:
-#ifdef MULTI_LANGUAGES_SUPPORT
-	int Language()
-	{
-		if (curLanguage < 0 || curLanguage >= LANG_LENGTH)
-			curLanguage = LANG_DEFAULT;
-		return curLanguage;
-	}
-	void SetLanguage(int value)
-	{
-		if (value < 0 || value >= LANG_LENGTH)
-			value = LANG_DEFAULT;
-		curLanguage = value;
-	}
-#endif
-
+	int 	language;
 	int		PreviewImage;
 	int		TurboModeEnabled; // 0 - disabled, 1 - enabled
 	int		AutoloadGame;
