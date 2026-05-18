@@ -120,7 +120,9 @@ HaltGui()
 
 static void ResetText()
 {
+	ErrorPrompt("LoadLanguage Start");
 	LoadLanguage();
+	ErrorPrompt("LoadLanguage End");
 
 	if(mainWindow)
 	{

@@ -100,7 +100,9 @@ enum
 	LANG_LENGTH,
 #ifdef MULTI_LANGUAGES_SUPPORT
 	LANG_DEFAULT = LANG_ENGLISH
-#elif defined(ZHCN_LANGUAGE_ONLY)
+#endif
+
+#ifdef ZHCN_LANGUAGE_ONLY
 	LANG_DEFAULT = LANG_SIMP_CHINESE
 #endif
 };
@@ -148,7 +150,9 @@ public:
 			value = LANG_DEFAULT;
 		curLanguage = value;
 	}
-#elif defined(ZHCN_LANGUAGE_ONLY)
+#endif
+
+#ifdef ZHCN_LANGUAGE_ONLY
 	int Language() { return LANG_SIMP_CHINESE; }
 	void SetLanguage(int value) {}
 #endif
