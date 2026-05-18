@@ -686,6 +686,8 @@ DefaultSettings ()
 #else
 	GCSettings.language = SYS_GetLanguage() + LANG_ENGLISH;
 #endif
+#elif defined(ZHCN_LANGUAGE_ONLY) // #ifdef MULTI_LANGUAGES_SUPPORT
+	GCSettings.language = LANG_SIMP_CHINESE;
 #endif // #ifdef MULTI_LANGUAGES_SUPPORT
 
 	GCSettings.OffsetMinutesUTC = 0;
