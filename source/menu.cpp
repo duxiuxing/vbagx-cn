@@ -3949,6 +3949,8 @@ static int MenuSettingsMenu()
 			case 5:
 			{
 				int value = GCSettings.Language() + 1;
+				if (value >= LANG_LENGTH)
+					value = LANG_JAPANESE;
 				GCSettings.SetLanguage(value);
 				break;
 			}
