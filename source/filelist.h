@@ -34,9 +34,7 @@
 #include "ca_lang.h"
 #include "tr_lang.h"
 #include "sv_lang.h"
-#endif
-
-#ifdef ZHCN_LANGUAGE_ONLY
+#elif defined(ZHCN_LANGUAGE_ONLY)
 #include "zh_lang.h"
 #endif
 

@@ -120,9 +120,7 @@ HaltGui()
 
 static void ResetText()
 {
-	ErrorPrompt("LoadLanguage Start");
 	LoadLanguage();
-	ErrorPrompt("LoadLanguage End");
 
 	if(mainWindow)
 	{
@@ -135,15 +133,17 @@ static void ResetText()
 static int currentLanguage = -1;
 
 void ChangeLanguage() {
-	if(currentLanguage == GCSettings.Language()) {
-//		return;
+	if(currentLanguage == GCSettings.language) {
+		return;
 	}
 
-	if(GCSettings.Language() == LANG_JAPANESE || GCSettings.Language() == LANG_KOREAN || GCSettings.Language() == LANG_SIMP_CHINESE) {
+#ifdef MULTI_LANGUAGES_SUPPORT
+	if(GCSettings.language == LANG_JAPANESE || GCSettings.language == LANG_KOREAN
+		|| GCSettings.language == LANG_SIMP_CHINESE || GCSettings.language == LANG_TRAD_CHINESE) {
 #ifdef HW_RVL
 		char filepath[MAXPATHLEN];
 
-		switch(GCSettings.Language()) {
+		switch(GCSettings.language) {
 			case LANG_KOREAN:
 				sprintf(filepath, "%s/ko.ttf", appPath);
 				break;
@@ -156,9 +156,6 @@ void ChangeLanguage() {
 //			case LANG_TRAD_CHINESE:
 //				sprintf(filepath, "%s/zh_hk.ttf", appPath);
 //				break;
-			default:
-				sprintf(filepath, "%s/en.ttf", appPath);
-				break;
 		}
 
 		size_t fontSize = LoadFont(filepath);
@@ -187,8 +184,10 @@ void ChangeLanguage() {
 		}
 	}
 #endif
+#endif // #ifdef MULTI_LANGUAGES_SUPPORT
+
 	ResetText();
-	currentLanguage = GCSettings.Language();
+	currentLanguage = GCSettings.language;
 }
 
 /****************************************************************************
@@ -3867,7 +3866,7 @@ static int MenuSettingsMenu()
 	int i = 0;
 	bool firstRun = true;
 	OptionList options;
-	currentLanguage = GCSettings.Language();
+	currentLanguage = GCSettings.language;
 
 	sprintf(options.name[i++], "Exit Action");
 	sprintf(options.name[i++], "Wiimote Orientation");
@@ -3949,13 +3948,17 @@ static int MenuSettingsMenu()
 				GCSettings.Rumble ^= 1;
 				break;
 			case 5:
-			{
-				int value = GCSettings.Language() + 1;
-				if (value >= LANG_LENGTH)
-					value = LANG_JAPANESE;
-				GCSettings.SetLanguage(value);
+#ifdef MULTI_LANGUAGES_SUPPORT
+				GCSettings.language++;
+				
+				if(GCSettings.language == LANG_TRAD_CHINESE) // skip (not supported)
+					GCSettings.language = LANG_KOREAN;
+				else if(GCSettings.language >= LANG_LENGTH)
+					GCSettings.language = LANG_JAPANESE;
+#elif defined(ZHCN_LANGUAGE_ONLY)
+				GCSettings.language == LANG_SIMP_CHINESE;
+#endif
 				break;
-			}
 			case 6:
 				GCSettings.PreviewImage++;
 				if(GCSettings.PreviewImage > 2)
@@ -4010,7 +4013,7 @@ static int MenuSettingsMenu()
 			else
 				sprintf (options.value[4], "Disabled");
 
-			switch(GCSettings.Language())
+			switch(GCSettings.language)
 			{
 				case LANG_JAPANESE:		sprintf(options.value[5], "Japanese"); break;
 				case LANG_ENGLISH:		sprintf(options.value[5], "English"); break;

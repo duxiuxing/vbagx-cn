@@ -210,7 +210,7 @@ bool LoadLanguage()
 	char *file, *eof;
 
 #ifdef MULTI_LANGUAGES_SUPPORT
-	switch(GCSettings.Language())
+	switch(GCSettings.language)
 	{
 		case LANG_JAPANESE: file = (char *)jp_lang; eof = file + jp_lang_size; break;
 		case LANG_ENGLISH: file = (char *)en_lang; eof = file + en_lang_size; break;
@@ -229,9 +229,7 @@ bool LoadLanguage()
 		case LANG_SWEDISH: file = (char *)sv_lang; eof = file + sv_lang_size; break;
 		default: return false;
 	}
-#endif
-
-#ifdef ZHCN_LANGUAGE_ONLY
+#elif defined(ZHCN_LANGUAGE_ONLY)
 	file = (char*)zh_lang;
 	eof = file + zh_lang_size;
 #endif
