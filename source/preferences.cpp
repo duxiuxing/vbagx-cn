@@ -676,7 +676,8 @@ DefaultSettings ()
 	GCSettings.PreviewImage = 0;
 	
 	GCSettings.BasicPalette = 0;
-	
+
+#ifdef MULTI_LANGUAGES_SUPPORT
 #ifdef HW_RVL
 	GCSettings.language = CONF_GetLanguage();
 
@@ -685,6 +686,8 @@ DefaultSettings ()
 #else
 	GCSettings.language = SYS_GetLanguage() + LANG_ENGLISH;
 #endif
+#endif // #ifdef MULTI_LANGUAGES_SUPPORT
+
 	GCSettings.OffsetMinutesUTC = 0;
 	GCSettings.GBHardware = 0;
 	GCSettings.SGBBorder = 0;
@@ -832,9 +835,9 @@ bool LoadPrefs()
 			break;
 	}
 
-	if(!prefFound) {
-		return false;
-	}
+//	if(!prefFound) {
+//		return false;
+//	}
 
 	FixInvalidSettings();
 
