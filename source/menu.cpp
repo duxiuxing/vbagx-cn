@@ -136,7 +136,7 @@ static int currentLanguage = -1;
 
 void ChangeLanguage() {
 	if(currentLanguage == GCSettings.Language()) {
-		return;
+//		return;
 	}
 
 	if(GCSettings.Language() == LANG_JAPANESE || GCSettings.Language() == LANG_KOREAN || GCSettings.Language() == LANG_SIMP_CHINESE) {
