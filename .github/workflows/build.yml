@@ -41,6 +41,10 @@ jobs:
         touch dist/VbaGX/vbagx/artwork/artworkdir
         mkdir dist/VbaGX/vbagx/cheats        
         touch dist/VbaGX/vbagx/cheats/cheatsdir
+        mkdir -p dist/VbaGX/vbagx/borders
+        cp hbc/defaultgba-1.png dist/VbaGX/vbagx/
+        cp hbc/defaultgba-2.png dist/VbaGX/vbagx/
+        cp hbc/defaultgba-3.png dist/VbaGX/vbagx/
         mkdir -p dist/VbaGX/vbagx/covers
         touch dist/VbaGX/vbagx/covers/coversdir
         mkdir dist/VbaGX/vbagx/roms        
