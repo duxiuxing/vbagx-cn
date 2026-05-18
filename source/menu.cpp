@@ -166,10 +166,10 @@ void ChangeLanguage() {
 			InitFreeType((u8*)ext_font_ttf, fontSize);
 		}
 		else {
-			GCSettings.SetLanguage(currentLanguage);
+			GCSettings.language = currentLanguage;
 		}
 #else
-	GCSettings.SetLanguage(currentLanguage);
+	GCSettings.language = currentLanguage;
 	ErrorPrompt("Unsupported language!");
 #endif
 	}
@@ -3950,13 +3950,13 @@ static int MenuSettingsMenu()
 			case 5:
 #ifdef MULTI_LANGUAGES_SUPPORT
 				GCSettings.language++;
-				
+
 				if(GCSettings.language == LANG_TRAD_CHINESE) // skip (not supported)
 					GCSettings.language = LANG_KOREAN;
 				else if(GCSettings.language >= LANG_LENGTH)
 					GCSettings.language = LANG_JAPANESE;
 #endif
-				break;			
+				break;
 			case 6:
 				GCSettings.PreviewImage++;
 				if(GCSettings.PreviewImage > 2)
