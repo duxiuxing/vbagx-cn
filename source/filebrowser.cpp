@@ -237,8 +237,9 @@ int UpdateDirName()
 	char * test;
 	char temp[1024];
 
-	if(browser.numEntries == 0)
+	if(browser.numEntries == 0 || browser.selIndex < 0 || browser.selIndex >= browser.numEntries) {
 		return 1;
+	}
 
 	/* current directory doesn't change */
 	if (strcmp(browserList[browser.selIndex].filename,".") == 0)
@@ -346,7 +347,7 @@ bool MakeFilePath(char filepath[], int type, char * filename, int filenum)
 		switch(type)
 		{
 			case FILE_SRAM:
-			case FILE_SNAPSHOT:
+			case FILE_STATE:
 				sprintf(folder, GCSettings.SaveFolder);
 
 				if(type == FILE_SRAM) sprintf(ext, "sav");
@@ -357,7 +358,7 @@ bool MakeFilePath(char filepath[], int type, char * filename, int filenum)
 					if(filenum == -1)
 						sprintf(file, "%s.%s", filename, ext);
 					else if(filenum == 0)
-						if (GCSettings.AppendAuto <= 0)
+						if (!GCSettings.AppendAuto)
 						{
 							sprintf(file, "%s.%s", filename, ext);
 						}
@@ -541,6 +542,13 @@ int BrowserLoadSz()
 	return szfiles;
 }
 
+void CloseSzIfOpen() {
+	if(inSz) {
+		inSz = false;
+		SzClose();
+	}
+}
+
 /****************************************************************************
  * BrowserLoadFile
  *
@@ -572,10 +580,10 @@ int BrowserLoadFile()
 	}
 	else
 	{
-		if (GCSettings.AutoLoad == 1)
+		if (GCSettings.AutoLoad == AUTOLOAD_SRAM)
 			LoadBatteryOrStateAuto(FILE_SRAM, SILENT);
-		else if (GCSettings.AutoLoad == 2)
-			LoadBatteryOrStateAuto(FILE_SNAPSHOT, SILENT);
+		else if (GCSettings.AutoLoad == AUTOLOAD_STATE)
+			LoadBatteryOrStateAuto(FILE_STATE, SILENT);
 
 		ResetBrowser();
 	}
@@ -592,12 +600,13 @@ int BrowserChangeFolder()
 {
 	if(inSz && browser.selIndex == 0) // inside a 7z, requesting to leave
 	{
-		inSz = false;
-		SzClose();
+		CloseSzIfOpen();
 	}
 
-	if(!UpdateDirName()) 
+	if(!UpdateDirName()) {
+		CloseSzIfOpen();
 		return -1;
+	}
 
 	HaltParseThread();
 	CleanupPath(browser.dir);
@@ -605,15 +614,22 @@ int BrowserChangeFolder()
 
 	if(browser.dir[0] != 0)
 	{
-		if(strstr(browser.dir, ".7z"))
-		{
-			BrowserLoadSz();
+		// skip if device is no longer mounted
+		if(!ChangeInterface(browser.dir, NOTSILENT)) {
+			CloseSzIfOpen();
+			browser.numEntries = 0;
 		}
-		else 
-		{
-			ParseDirectory(true, true);
+		else {
+			if(strstr(browser.dir, ".7z"))
+			{
+				BrowserLoadSz();
+			}
+			else 
+			{
+				ParseDirectory(true, true);
+			}
+			FindAndSelectLastLoadedFile();
 		}
-		FindAndSelectLastLoadedFile();
 	}
 
 	if(browser.numEntries == 0)
@@ -692,7 +708,7 @@ int BrowserChangeFolder()
 	if(browser.dir[0] == 0)
 	{
 		GCSettings.LoadFolder[0] = 0;
-		GCSettings.LoadMethod = 0;
+		GCSettings.LoadMethod = DEVICE_AUTO;
 	}
 	else
 	{
@@ -714,7 +730,7 @@ OpenGameList ()
 {
 	int device = GCSettings.LoadMethod;
 
-	if(device > 0 && ChangeInterface(device, SILENT)) {
+	if(device > 0 && ChangeInterface(device, NOTSILENT)) {
 		// change current dir to roms directory
 		sprintf(browser.dir, "%s%s/", pathPrefix[device], GCSettings.LoadFolder);
 

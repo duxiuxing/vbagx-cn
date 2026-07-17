@@ -20,6 +20,7 @@
 #include <errno.h>
 
 #include "vbagx.h"
+#include "vbasupport.h"
 #include "fileop.h"
 #include "filebrowser.h"
 #include "audio.h"
@@ -42,7 +43,6 @@
 #include "vba/gba/Sound.h"
 #include "vba/gba/Cheats.h"
 #include "vba/gba/GBA.h"
-#include "vba/gba/agbprint.h"
 #include "vba/gb/gb.h"
 #include "vba/gb/gbGlobals.h"
 #include "vba/gb/gbCheats.h"
@@ -51,8 +51,8 @@
 #include "goomba/goombarom.h"
 #include "goomba/goombasav.h"
 
-static u32 start;
-int cartridgeType = 0;
+static u64 start;
+int cartridgeType = CARTRIDGE_NONE;
 u32 RomIdCode;
 char RomTitle[17];
 
@@ -74,27 +74,13 @@ int systemVerbose = 0;
 int systemRedShift = 0;
 int systemBlueShift = 0;
 int systemGreenShift = 0;
-int systemColorDepth = 0;
 u16 systemGbPalette[24];
 u16 systemColorMap16[0x10000];
-u32 *systemColorMap32 = NULL;
 
-void gbSetPalette(u32 RRGGBB[]);
-bool StartColorizing();
 void StopColorizing();
-extern bool ColorizeGameboy;
-extern u16 systemMonoPalette[14];
-void gbSetBgPal(u8 WhichPal, u32 bright, u32 medium, u32 dark, u32 black=0x000000);
-void gbSetSpritePal(u8 WhichPal, u32 bright, u32 medium, u32 dark);
 
 struct EmulatedSystem emulator =
 {
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
 	NULL,
 	NULL,
 	NULL,
@@ -110,10 +96,12 @@ struct EmulatedSystem emulator =
 *
 * Returns number of milliseconds since program start
 ****************************************************************************/
-u32 systemGetClock( void )
+static u64 lastTime = 0;
+
+u32 systemGetClock(void)
 {
-	u32 now = gettime();
-	return diff_usec(start, now) / 1000;
+    const u64 now = gettime();
+    return (u32)(ticks_to_microsecs(now - start) / 1000);
 }
 
 void systemFrame() {}
@@ -126,25 +114,74 @@ bool systemPauseOnFrame()
 	return false;
 }
 
-static u32 lastTime = 0;
-#define RATE60HZ 166666.67 // 1/6 second or 166666.67 usec
+/* *****************************************************************************
+ * Frame-rate synchronisation
+ *
+ * VBA-M calls system10Frames() once per 10 emulated frames. We use it to:
+ * 1. Throttle to the target rate by sleeping when we're running ahead.
+ * 2. Adapt the GBA frame-skip level when the core can't keep up.
+ *****************************************************************************/
+
+#define USEC_PER_SEC      1000000
+#define FRAMES_PER_BATCH  10
+#define MAX_FRAME_SKIP    20
+#define SPEED_TOO_SLOW    98 // % of real time: below this -> skip more
+#define SPEED_TOO_FAST    125 // % of real time: above this -> skip less
+
+// Map a measured speed (% of real time) to a frame-skip delta.
+// Positive => behind, skip more; negative => ahead, skip less.
+// The gap between SPEED_TOO_SLOW and SPEED_TOO_FAST is a deliberate dead-band
+// that stops the controller oscillating on every batch.
+static int frameSkipDelta(int speed)
+{
+	if (speed < 60)
+		return +4;
+	if (speed < 70)
+		return +3;
+	if (speed < 80)
+		return +2;
+	if (speed < SPEED_TOO_SLOW)
+		return +1;
+
+	if (speed > 185)
+		return -3;
+	if (speed > 145)
+		return -2;
+	if (speed > SPEED_TOO_FAST)
+		return -1;
+
+	return 0; // inside the dead-band
+}
 
 void system10Frames(int rate)
 {
-	u32 time = gettime();
-	u32 diff = diff_usec(lastTime, time);
+	const u64 nowUs = ticks_to_microsecs(gettime());
 
-	// expected diff - actual diff
-	u32 timeOff = RATE60HZ - diff;
+	// Prime the reference on the first call (lastTime == 0) so we never sync
+	// against zero. The now <= lastTime case is a defensive re-anchor.
+	if (lastTime == 0 || nowUs <= lastTime)
+	{
+		lastTime = nowUs;
+		return;
+	}
 
-	if(timeOff > 0 && timeOff < 100000) // we're running ahead!
-		usleep(timeOff); // let's take a nap
-	else
-		timeOff = 0; // timeoff was not valid
+	// Derive the target from the rate the core asks for, so 50 Hz / PAL
+	// titles are throttled correctly instead of always assuming 60 Hz.
+	const int safeRate = (rate > 0) ? rate : 60;
+	const s64 targetPeriod = (s64)FRAMES_PER_BATCH * USEC_PER_SEC / safeRate;
 
-	int speed = (RATE60HZ/diff)*100;
+	const s64 elapsed = (s64)(nowUs - lastTime); // core time for 10 frames
+	const s64 timeOff = targetPeriod - elapsed; // signed: > 0 => ahead
 
-	if (cartridgeType == 2) // GBA games require frameskipping
+	// Sleep when ahead, but never longer than one whole period (caps, rather
+	// than discards, a large lead - prevents light cores from running too fast).
+	if (timeOff > 0)
+		usleep((u32)(timeOff < targetPeriod ? timeOff : targetPeriod));
+
+	// Speed as a % of real time. elapsed > 0 is guaranteed above, so no /0.
+	const int speed = (int)(targetPeriod * 100 / elapsed);
+
+	if (cartridgeType == CARTRIDGE_GBA) // only GBA is heavy enough to need it
 	{
 		if (!GCSettings.gbaFrameskip)
 		{
@@ -152,32 +189,21 @@ void system10Frames(int rate)
 		}
 		else
 		{
-			// consider increasing skip
-			if(speed < 60)
-				systemFrameSkip += 4;
-			else if(speed < 70)
-				systemFrameSkip += 3;
-			else if(speed < 80)
-				systemFrameSkip += 2;
-			else if(speed < 98)
-				++systemFrameSkip;
+			systemFrameSkip += frameSkipDelta(speed);
 
-			// consider decreasing skip
-			else if(speed > 185)
-				systemFrameSkip -= 3;
-			else if(speed > 145)
-				systemFrameSkip -= 2;
-			else if(speed > 125)
-				systemFrameSkip -= 1;
-
-			// correct invalid frame skip values
-			if(systemFrameSkip > 20)
-				systemFrameSkip = 20;
-			else if(systemFrameSkip < 0)
+			if (systemFrameSkip > MAX_FRAME_SKIP)
+				systemFrameSkip = MAX_FRAME_SKIP;
+			else if (systemFrameSkip < 0)
 				systemFrameSkip = 0;
 		}
 	}
-	lastTime = gettime();
+
+	// Advance the reference drift-free:
+	// ahead -> next reference is the intended wake time (now + timeOff), so
+	//          usleep() rounding error can't accumulate across batches.
+	// behind -> re-anchor to now (timeOff <= 0), so we never fast-forward to
+	//           "catch up" after a stall
+	lastTime = nowUs + (timeOff > 0 ? timeOff : 0);
 }
 
 /****************************************************************************
@@ -263,7 +289,7 @@ int MemCPUWriteBatteryFile(char * membuffer)
 * LoadBatteryOrState
 * Load Battery/State file into memory
 * action = FILE_SRAM - Load battery
-* action = FILE_SNAPSHOT - Load state
+* action = FILE_STATE - Load state
 ****************************************************************************/
 
 bool LoadBatteryOrState(char * filepath, int action, bool silent)
@@ -280,7 +306,7 @@ bool LoadBatteryOrState(char * filepath, int action, bool silent)
 	// load the file into savebuffer
 	offset = LoadFile(filepath, silent);
 			
-	if (cartridgeType == 1 && goomba_is_sram(savebuffer)) {
+	if (cartridgeType == CARTRIDGE_GB && goomba_is_sram(savebuffer)) {
 		void* cleaned = goomba_cleanup(savebuffer);
 		if (savebuffer == NULL) {
 			ErrorPrompt(goomba_last_error());
@@ -313,7 +339,7 @@ bool LoadBatteryOrState(char * filepath, int action, bool silent)
 	{
 		if(action == FILE_SRAM)
 		{
-			if(cartridgeType == 1)
+			if(cartridgeType == CARTRIDGE_GB)
 				result = MemgbReadBatteryFile((char *)savebuffer, offset);
 			else
 				result = MemCPUReadBatteryFile((char *)savebuffer, offset);
@@ -397,13 +423,13 @@ bool SaveBatteryOrState(char * filepath, int action, bool silent)
 	if(!FindDevice(filepath, &device))
 		return 0;
 
-	if(action == FILE_SNAPSHOT && gameScreenPngSize > 0)
+	if(action == FILE_STATE && gameScreenPng.size > 0)
 	{
 		char screenpath[1024];
 		strncpy(screenpath, filepath, 1024);
 		screenpath[strlen(screenpath)-4] = 0;
 		strcat(screenpath, ".png");
-		SaveFile((char *)gameScreenPng, screenpath, gameScreenPngSize, silent);
+		SaveFile((char *)gameScreenPng.buffer, screenpath, gameScreenPng.size, silent);
 	}
 
 	AllocSaveBuffer();
@@ -411,12 +437,12 @@ bool SaveBatteryOrState(char * filepath, int action, bool silent)
 	// put VBA memory into savebuffer, sets datasize to size of memory written
 	if(action == FILE_SRAM)
 	{
-		if(cartridgeType == 1)
+		if(cartridgeType == CARTRIDGE_GB)
 			datasize = MemgbWriteBatteryFile((char *)savebuffer);
 		else
 			datasize = MemCPUWriteBatteryFile((char *)savebuffer);
 		
-		if (cartridgeType == 1) {
+		if (cartridgeType == CARTRIDGE_GB) {
 			const char* generic_goomba_error = "Cannot save SRAM in Goomba format (did not load correctly.)";
 			// check for goomba sram format
 			char* old_sram = (char*)malloc(GOOMBA_COLOR_SRAM_SIZE);
@@ -493,25 +519,25 @@ bool SaveBatteryOrStateAuto(int action, bool silent)
  * Save Screenshot / Preview image
  ***************************************************************************/
 
-int SavePreviewImg(char * filepath, bool silent)
+bool SavePreviewImg(char * filepath, bool silent)
 {
 	int device;
 	
 	if(!FindDevice(filepath, &device))
-		return 0;
+		return false;
 
-	if(gameScreenPngSize > 0)
+	if(gameScreenPng.size > 0)
 	{
 		char screenpath[1024];
 		strcpy(screenpath, filepath);
 		screenpath[strlen(screenpath)] = 0;
 		strcat(screenpath, ".png");
-		SaveFile((char *)gameScreenPng, screenpath, gameScreenPngSize, silent);
+		SaveFile((char *)gameScreenPng.buffer, screenpath, gameScreenPng.size, silent);
 	}
 
 	if(!silent)
 		InfoPrompt ("Save successful");
-	return 1;
+	return true;
 }
 
 /****************************************************************************
@@ -742,14 +768,14 @@ static bool ValidGameId(u32 id)
 
 bool IsGameboyGame()
 {
-	if(cartridgeType == 1 && !gbCgbMode && !gbSgbMode)
+	if(cartridgeType == CARTRIDGE_GB && !gbCgbMode && !gbSgbMode)
 		return true;
 	return false;
 }
 
 bool IsGBAGame()
 {
-	if(cartridgeType == 2)
+	if(cartridgeType == CARTRIDGE_GBA)
 		return true;
 	return false;
 }
@@ -917,7 +943,7 @@ void LoadPatch()
 		// create memory file
 		MFILE * mf = memfopen((char *)savebuffer, patchsize);
 
-		if(cartridgeType == 1)
+		if(cartridgeType == CARTRIDGE_GB)
 		{
 			if(patchtype == 0)
 				patchApplyIPS(mf, &gbRom, &gbRomSize);
@@ -969,7 +995,7 @@ void SaveSGBBorderIfNoneExists(const void* buffer) {
 	pngContext = PNGU_SelectImageFromBuffer(rgba8);
 	if (pngContext == NULL) goto cleanup;
 	
-	PNGU_EncodeFromLinearRGB565(pngContext, 256, 224, buffer, 258);
+	if(PNGU_EncodeFromLinearRGB565(pngContext, 256, 224, buffer, 258) != PNGU_OK) goto cleanup;
 	fwrite(rgba8, 1, 256*224*3, f);
 	
 cleanup:
@@ -987,9 +1013,9 @@ char* AllocAndGetPNGBorderPath(const char* title) {
 	
 	// If no title was passed in, get the rom title
 	if (title == NULL) {
-		if (cartridgeType == 1) {
+		if (cartridgeType == CARTRIDGE_GB) {
 			title = gb_get_title(gbRom, NULL);
-		} else if (cartridgeType == 2) {
+		} else if (cartridgeType == CARTRIDGE_GBA) {
 			memcpy(tmp, rom + 0xA0, 12);
 			tmp[12] = '\0';
 			title = tmp;
@@ -1109,7 +1135,7 @@ bool LoadGBROM()
 		}
 	}
 	
-	if (GCSettings.SGBBorder == 2) LoadPNGBorder("default");
+	if (GCSettings.SGBBorder == SGBBORDER_FROMPNG) LoadPNGBorder("default");
 
 	if(gbRomSize <= 0)
 		return false;
@@ -1133,14 +1159,14 @@ bool utilIsZipFile(const char* file)
 
 bool LoadVBAROM()
 {
-	cartridgeType = 0;
+	cartridgeType = CARTRIDGE_NONE;
 	int loaded = 0;
 
 	// image type (checks file extension)
 	if(utilIsGBAImage(browserList[browser.selIndex].filename))
-		cartridgeType = 2;
+		cartridgeType = CARTRIDGE_GBA;
 	else if(utilIsGBImage(browserList[browser.selIndex].filename))
-		cartridgeType = 1;
+		cartridgeType = CARTRIDGE_GB;
 	else if(utilIsZipFile(browserList[browser.selIndex].filename))
 	{
 		// we need to check the file extension of the first file in the archive
@@ -1154,11 +1180,11 @@ bool LoadVBAROM()
 
 		if(utilIsGBAImage(zippedFilename))
 		{
-			cartridgeType = 2;
+			cartridgeType = CARTRIDGE_GBA;
 		}
 		else if(utilIsGBImage(zippedFilename))
 		{
-			cartridgeType = 1;
+			cartridgeType = CARTRIDGE_GB;
 		}
 		else
 		{
@@ -1169,7 +1195,7 @@ bool LoadVBAROM()
 	}
 
 	// leave before we do anything
-	if(cartridgeType != 1 && cartridgeType != 2)
+	if(cartridgeType != CARTRIDGE_GB && cartridgeType != CARTRIDGE_GBA)
 	{
 		// Not zip gba agb gbc cgb sgb gb mb bin elf or dmg!
 		ErrorPrompt("Unrecognized file extension!");
@@ -1188,7 +1214,7 @@ bool LoadVBAROM()
 	}
 	SGBBorderLoadedFromGame = false; // don't try to copy sgb border from game to png unless we're in sgb mode
 
-	if(cartridgeType == 2)
+	if(cartridgeType == CARTRIDGE_GBA)
 	{
 		emulator = GBASystem;
 		srcWidth = 240;
@@ -1198,16 +1224,16 @@ bool LoadVBAROM()
 		cpuSaveType = 0;
 		if (loaded == 2) {
 			loaded = 0;
-			cartridgeType = 1;
-		} else if (loaded == 1 && GCSettings.SGBBorder == 2) {
+			cartridgeType = CARTRIDGE_GB;
+		} else if (loaded == 1 && GCSettings.SGBBorder == SGBBORDER_FROMPNG) {
 			LoadPNGBorder("defaultgba");
 		}
 	}
 	
-	if (cartridgeType == 1)
+	if (cartridgeType == CARTRIDGE_GB)
 	{
 		emulator = GBSystem;
-		gbBorderOn = (GCSettings.SGBBorder == 1);
+		gbBorderOn = (GCSettings.SGBBorder == SGBBORDER_FROMGAME);
 
 		if(gbBorderOn)
 		{
@@ -1245,13 +1271,9 @@ bool LoadVBAROM()
 			GX_Render_Init(srcWidth, srcHeight);
 		}
 
-		if (cartridgeType == 1)
+		if (cartridgeType == CARTRIDGE_GB)
 		{
 			gbGetHardwareType();
-
-			// used for the handling of the gb Boot Rom
-			//if (gbHardware & 5)
-			//gbCPUInit(gbBiosFileName, useBios);
 
 			LoadPatch();
 
@@ -1268,7 +1290,6 @@ bool LoadVBAROM()
 			cpuSaveType = 0; // automatic
 			flashSetSize(0x10000); // 64K saves
 			rtcEnable(false);
-			agbPrintEnable(false);
 			mirroringEnable = false;
 
 			// Apply preferences specific to this game
@@ -1307,7 +1328,7 @@ void InitialisePalette()
 	for( i = 0; i < 24; )
 	{
 
-		if (GCSettings.BasicPalette == 0) //Greenish color
+		if (GCSettings.BasicPalette == BASICPALETTE_GREEN) //Greenish color
 		{
 			systemGbPalette[i++] = (0x1c) | (0x1e << 5) | (0x1c << 10);
 			systemGbPalette[i++] = (0x10) | (0x17 << 5) | (0x0b << 10);
@@ -1322,7 +1343,6 @@ void InitialisePalette()
 		systemGbPalette[i++] = 0;
 	}
 	// Set palette etc - Fixed to RGB565
-	systemColorDepth = 16;
 	systemRedShift = 11;
 	systemGreenShift = 6;
 	systemBlueShift = 0;

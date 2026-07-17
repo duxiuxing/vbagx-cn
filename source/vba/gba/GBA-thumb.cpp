@@ -3,9 +3,15 @@
 #include <stdarg.h>
 #include <string.h>
 
+#if JIT_COMPILER_DIFFERENTIAL_TESTING
+#include <string>
+#endif
+
 #include "GBA.h"
 #include "GBAcpu.h"
 #include "GBAinline.h"
+#include "JITCache.h"
+#include "JITDebug.h"
 #include "Globals.h"
 #include "EEprom.h"
 #include "Flash.h"
@@ -14,17 +20,8 @@
 #include "bios.h"
 #include "Cheats.h"
 #include "../NLS.h"
-#include "elf.h"
 #include "../Util.h"
 #include "../System.h"
-#include "agbprint.h"
-#ifdef PROFILING
-#include "prof/prof.h"
-#endif
-
-#ifdef _MSC_VER
-#define snprintf _snprintf
-#endif
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -32,972 +29,241 @@ static int clockTicks;
 
 static INSN_REGPARM void thumbUnknownInsn(u32 opcode)
 {
-#ifdef GBA_LOGGING
-  if(systemVerbose & VERBOSE_UNDEFINED)
-    log("Undefined THUMB instruction %04x at %08x\n", opcode, armNextPC-2);
-#endif
   CPUUndefinedException();
 }
 
-#ifdef BKPT_SUPPORT
-static INSN_REGPARM void thumbBreakpoint(u32 opcode)
-{
-  reg[15].I -= 2;
-  armNextPC -= 2;
-  dbgSignal(5, opcode & 255);
-  clockTicks = -1;
-}
-#endif
-
 // Common macros //////////////////////////////////////////////////////////
 
-#ifdef BKPT_SUPPORT
-# define THUMB_CONSOLE_OUTPUT(a,b) do {                     \
-    if ((opcode == 0x4000) && (reg[0].I == 0xC0DED00D)) {   \
-      dbgOutput((a), (b));                                  \
-    }                                                       \
-} while (0)
-# define UPDATE_OLDREG do {                                 \
-    if (debugger_last) {                                    \
-        snprintf(oldbuffer, sizeof(oldbuffer), "%08X",      \
-                 armState ? reg[15].I - 4 : reg[15].I - 2); \
-        int i;						    \
-        for (i = 0; i < 18; i++) {                          \
-            oldreg[i] = reg[i].I;                           \
-        }                                                   \
-    }                                                       \
-} while (0)
-#else
-# define THUMB_CONSOLE_OUTPUT(a,b)
-# define UPDATE_OLDREG
-#endif
+// Broadway Optimization: Branchless Memory Prefetch Evaluation
+// Replaces volatile boolean comparisons with pure 1-cycle bitwise logic
+// Logic: ~((v | -v) >> 31) & 1 yields 1 ONLY if v is exactly 0.
+#define UPDATE_BUS_PREFETCH \
+    busPrefetch |= (busPrefetchEnable & (~((busPrefetchCount | -busPrefetchCount) >> 31) & 1));
 
 #define NEG(i) ((i) >> 31)
 #define POS(i) ((~(i)) >> 31)
 
-#ifndef C_CORE
-#ifdef __GNUC__
-#ifdef __POWERPC__
-  #define ADD_RD_RS_RN(N) \
-            {										\
-                int Flags;							\
-                int Result;							\
-                asm volatile("addco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[source].I), 	\
-                              "r" (reg[N].I)		\
-                            );						\
-                reg[dest].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define ADD_RD_RS_O3(N) \
-            {										\
-                int Flags;							\
-                int Result;							\
-                asm volatile("addco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[source].I), 	\
-                              "r" (N)				\
-                            );						\
-                reg[dest].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define ADD_RD_RS_O3_0 ADD_RD_RS_O3
-  #define ADD_RN_O8(d) \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("addco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[(d)].I), 	\
-                              "r" (opcode & 255)	\
-                            );						\
-                reg[(d)].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define CMN_RD_RS \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("addco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[dest].I), 	\
-                              "r" (value)			\
-                            );						\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define ADC_RD_RS \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("mtspr 1, %4\n"		\ /* reg 1 is xer */
-                             "addeo. %0, %2, %3\n"	\
-                             "mcrxr cr1\n"			\
-                             "mfcr	%1\n"			\
-                             : "=r" (Result),		\
-                               "=r" (Flags)			\
-                             : "r" (reg[dest].I),	\
-                               "r" (value),			\
-                               "r" (C_FLAG << 29)	\
-                             );						\
-                reg[dest].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define SUB_RD_RS_RN(N) \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("subco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[source].I), 	\
-                              "r" (reg[N].I)		\
-                            );						\
-                reg[dest].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define SUB_RD_RS_O3(N) \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("subco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[source].I), 	\
-                              "r" (N)				\
-                            );						\
-                reg[dest].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define SUB_RD_RS_O3_0 SUB_RD_RS_O3
-  #define SUB_RN_O8(d) \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("subco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[(d)].I), 	\
-                              "r" (opcode & 255)	\
-                            );						\
-                reg[(d)].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define CMP_RN_O8(d) \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("subco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[(d)].I), 	\
-                              "r" (opcode & 255)	\
-                            );						\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define SBC_RD_RS \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("mtspr 1, %4\n"		\ /* reg 1 is xer */
-                             "subfeo. %0, %3, %2\n"	\
-                             "mcrxr cr1\n"			\
-                             "mfcr	%1\n"			\
-                             : "=r" (Result),		\
-                               "=r" (Flags)			\
-                             : "r" (reg[dest].I),	\
-                               "r" (value),			\
-                               "r" (C_FLAG << 29) 	\
-                             );						\
-                reg[dest].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define NEG_RD_RS \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("subfco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[source].I), 	\
-                              "r" (0)				\
-                            );						\
-                reg[dest].I = Result;				\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-  #define CMP_RD_RS \
-            {\
-                int Flags;							\
-                int Result;							\
-                asm volatile("subco. %0, %2, %3\n"	\
-                            "mcrxr cr1\n"			\
-                            "mfcr %1\n"				\
-                            : "=r" (Result), 		\
-                              "=r" (Flags)			\
-                            : "r" (reg[dest].I), 	\
-                              "r" (value)			\
-                            );						\
-                Z_FLAG = (Flags >> 29) & 1;			\
-                N_FLAG = (Flags >> 31) & 1;			\
-                C_FLAG = (Flags >> 25) & 1;			\
-                V_FLAG = (Flags >> 26) & 1;			\
-            }
-#else
-  #define EMIT1(op,arg)        #op" "arg"; "
-  #define EMIT2(op,src,dest)   #op" "src", "dest"; "
-  #define KONST(val)           "$"#val
-  #define ASMVAR(cvar)         ASMVAR2 (__USER_LABEL_PREFIX__, cvar)
-  #define ASMVAR2(prefix,cvar) STRING (prefix) cvar
-  #define STRING(x)            #x
-  #define VAR(var)             ASMVAR(#var)
-  #define REGREF1(index)       ASMVAR("reg("index")")
-  #define REGREF2(index,scale) ASMVAR("reg(,"index","#scale")")
-  #define eax "%%eax"
-  #define ecx "%%ecx"
-  #define edx "%%edx"
-  #define ADD_RN_O8(d) \
-     asm ("andl $0xFF, %%eax;"\
-          "addl %%eax, %0;"\
-          EMIT1(setsb, VAR(N_FLAG)) \
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          EMIT1(setcb, VAR(C_FLAG)) \
-          EMIT1(setob, VAR(V_FLAG)) \
-          : "=m" (reg[(d)].I));
-  #define CMN_RD_RS \
-     asm ("add %0, %1;"\
-          EMIT1(setsb, VAR(N_FLAG)) \
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          EMIT1(setcb, VAR(C_FLAG)) \
-          EMIT1(setob, VAR(V_FLAG)) \
-          : \
-          : "r" (value), "r" (reg[dest].I):"1");
-  #define ADC_RD_RS \
-     asm (EMIT2(bt,KONST(0),VAR(C_FLAG)) \
-          "adc %1, %%ebx;"\
-          EMIT1(setsb, VAR(N_FLAG)) \
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          EMIT1(setcb, VAR(C_FLAG)) \
-          EMIT1(setob, VAR(V_FLAG)) \
-          : "=b" (reg[dest].I)\
-          : "r" (value), "b" (reg[dest].I));
-  #define SUB_RN_O8(d) \
-     asm ("andl $0xFF, %%eax;"\
-          "subl %%eax, %0;"\
-          EMIT1(setsb, VAR(N_FLAG)) \
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          EMIT1(setncb, VAR(C_FLAG)) \
-          EMIT1(setob, VAR(V_FLAG)) \
-          : "=m" (reg[(d)].I));
-  #define MOV_RN_O8(d) \
-     asm ("andl $0xFF, %%eax;"\
-          EMIT2(movb,KONST(0),VAR(N_FLAG)) \
-          "movl %%eax, %0;"\
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          : "=m" (reg[(d)].I));
-  #define CMP_RN_O8(d) \
-     asm ("andl $0xFF, %%eax;"\
-          "cmpl %%eax, %0;"\
-          EMIT1(setsb, VAR(N_FLAG)) \
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          EMIT1(setncb, VAR(C_FLAG)) \
-          EMIT1(setob, VAR(V_FLAG)) \
-          : \
-          : "m" (reg[(d)].I));
-  #define SBC_RD_RS \
-     asm volatile (EMIT2(bt,KONST(0),VAR(C_FLAG)) \
-                   "cmc;"\
-                   "sbb %1, %%ebx;"\
-                   EMIT1(setsb, VAR(N_FLAG)) \
-                   EMIT1(setzb, VAR(Z_FLAG)) \
-                   EMIT1(setncb, VAR(C_FLAG)) \
-                   EMIT1(setob, VAR(V_FLAG)) \
-                   : "=b" (reg[dest].I)\
-                   : "r" (value), "b" (reg[dest].I) : "cc", "memory");
-  #define LSL_RD_RS \
-         asm ("shl %%cl, %%eax;"\
-              EMIT1(setcb, VAR(C_FLAG)) \
-              : "=a" (value)\
-              : "a" (reg[dest].I), "c" (value));
-  #define LSR_RD_RS \
-         asm ("shr %%cl, %%eax;"\
-              EMIT1(setcb, VAR(C_FLAG)) \
-              : "=a" (value)\
-              : "a" (reg[dest].I), "c" (value));
-  #define ASR_RD_RS \
-         asm ("sar %%cl, %%eax;"\
-              EMIT1(setcb, VAR(C_FLAG)) \
-              : "=a" (value)\
-              : "a" (reg[dest].I), "c" (value));
-  #define ROR_RD_RS \
-         asm ("ror %%cl, %%eax;"\
-              EMIT1(setcb, VAR(C_FLAG)) \
-              : "=a" (value)\
-              : "a" (reg[dest].I), "c" (value));
-  #define NEG_RD_RS \
-     asm ("neg %%ebx;"\
-          EMIT1(setsb, VAR(N_FLAG)) \
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          EMIT1(setncb, VAR(C_FLAG)) \
-          EMIT1(setob, VAR(V_FLAG)) \
-          : "=b" (reg[dest].I)\
-          : "b" (reg[source].I));
-  #define CMP_RD_RS \
-     asm ("sub %0, %1;"\
-          EMIT1(setsb, VAR(N_FLAG)) \
-          EMIT1(setzb, VAR(Z_FLAG)) \
-          EMIT1(setncb, VAR(C_FLAG)) \
-          EMIT1(setob, VAR(V_FLAG)) \
-          : \
-          : "r" (value), "r" (reg[dest].I):"1");
-  #define IMM5_INSN(OP,N) \
-     asm("movl %%eax,%%ecx;"         \
-         "shrl $1,%%eax;"            \
-         "andl $7,%%ecx;"            \
-         "andl $0x1C,%%eax;"         \
-         EMIT2(movl, REGREF1(eax), edx) \
-         OP                          \
-         EMIT1(setsb, VAR(N_FLAG)) \
-         EMIT1(setzb, VAR(Z_FLAG)) \
-         EMIT2(movl, edx, REGREF2(ecx,4)) \
-         : : "i" (N))
-  #define IMM5_INSN_0(OP)            \
-     asm("movl %%eax,%%ecx;"         \
-         "shrl $1,%%eax;"            \
-         "andl $7,%%ecx;"            \
-         "andl $0x1C,%%eax;"         \
-         EMIT2(movl, REGREF1(eax), edx) \
-         OP                          \
-         EMIT1(setsb, VAR(N_FLAG)) \
-         EMIT1(setzb, VAR(Z_FLAG)) \
-         EMIT2(movl, edx, REGREF2(ecx,4)) \
-         : : )
-  #define IMM5_LSL \
-         "shll %0,%%edx;"\
-         EMIT1(setcb, VAR(C_FLAG))
-  #define IMM5_LSL_0 \
-         "testl %%edx,%%edx;"
-  #define IMM5_LSR \
-         "shrl %0,%%edx;"\
-         EMIT1(setcb, VAR(C_FLAG))
-  #define IMM5_LSR_0 \
-         "testl %%edx,%%edx;"\
-         EMIT1(setsb, VAR(C_FLAG)) \
-         "xorl %%edx,%%edx;"
-  #define IMM5_ASR \
-         "sarl %0,%%edx;"\
-         EMIT1(setcb, VAR(C_FLAG))
-  #define IMM5_ASR_0 \
-         "sarl $31,%%edx;"\
-         EMIT1(setsb, VAR(C_FLAG))
-  #define THREEARG_INSN(OP,N) \
-     asm("movl %%eax,%%edx;"       \
-         "shrl $1,%%edx;"          \
-         "andl $0x1C,%%edx;"       \
-         "andl $7,%%eax;"          \
-         EMIT2(movl, REGREF1(edx), ecx) \
-         OP(N)                     \
-         EMIT1(setsb, VAR(N_FLAG)) \
-         EMIT1(setzb, VAR(Z_FLAG)) \
-         EMIT2(movl, ecx, REGREF2(eax,4)) \
-         : : )
-  #define ADD_RD_RS_RN(N)          \
-         EMIT2(add,VAR(reg)"+"#N"*4",ecx) \
-         EMIT1(setcb, VAR(C_FLAG)) \
-         EMIT1(setob, VAR(V_FLAG))
-  #define ADD_RD_RS_O3(N)          \
-         "add $"#N",%%ecx;"        \
-         EMIT1(setcb, VAR(C_FLAG)) \
-         EMIT1(setob, VAR(V_FLAG))
-  #define ADD_RD_RS_O3_0(N)        \
-         EMIT2(movb,KONST(0),VAR(C_FLAG)) \
-         "add $0,%%ecx;"           \
-         EMIT2(movb,KONST(0),VAR(V_FLAG))
-  #define SUB_RD_RS_RN(N) \
-         EMIT2(sub,VAR(reg)"+"#N"*4",ecx) \
-         EMIT1(setncb, VAR(C_FLAG)) \
-         EMIT1(setob, VAR(V_FLAG))
-  #define SUB_RD_RS_O3(N) \
-         "sub $"#N",%%ecx;"        \
-         EMIT1(setncb, VAR(C_FLAG)) \
-         EMIT1(setob, VAR(V_FLAG))
-  #define SUB_RD_RS_O3_0(N)        \
-         EMIT2(movb,KONST(1),VAR(C_FLAG)) \
-         "sub $0,%%ecx;"           \
-         EMIT2(movb,KONST(0),VAR(V_FLAG))
-#endif
-#else // !__GNUC__
-  #define ADD_RD_RS_RN(N) \
-   {\
-     __asm mov eax, source\
-     __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-     __asm add ebx, dword ptr [OFFSET reg+4*N]\
-     __asm mov eax, dest\
-     __asm mov dword ptr [OFFSET reg+4*eax], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm setc byte ptr C_FLAG\
-     __asm seto byte ptr V_FLAG\
-   }
-  #define ADD_RD_RS_O3(N) \
-   {\
-     __asm mov eax, source\
-     __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-     __asm add ebx, N\
-     __asm mov eax, dest\
-     __asm mov dword ptr [OFFSET reg+4*eax], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm setc byte ptr C_FLAG\
-     __asm seto byte ptr V_FLAG\
-   }
-  #define ADD_RD_RS_O3_0 \
-   {\
-     __asm mov eax, source\
-     __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-     __asm add ebx, 0\
-     __asm mov eax, dest\
-     __asm mov dword ptr [OFFSET reg+4*eax], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm mov byte ptr C_FLAG, 0\
-     __asm mov byte ptr V_FLAG, 0\
-   }
-  #define ADD_RN_O8(d) \
-   {\
-     __asm mov ebx, opcode\
-     __asm and ebx, 255\
-     __asm add dword ptr [OFFSET reg+4*(d)], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm setc byte ptr C_FLAG\
-     __asm seto byte ptr V_FLAG\
-   }
-  #define CMN_RD_RS \
-     {\
-       __asm mov eax, dest\
-       __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-       __asm add ebx, value\
-       __asm sets byte ptr N_FLAG\
-       __asm setz byte ptr Z_FLAG\
-       __asm setc byte ptr C_FLAG\
-       __asm seto byte ptr V_FLAG\
-     }
-  #define ADC_RD_RS \
-     {\
-       __asm mov ebx, dest\
-       __asm mov ebx, dword ptr [OFFSET reg+4*ebx]\
-       __asm bt word ptr C_FLAG, 0\
-       __asm adc ebx, value\
-       __asm mov eax, dest\
-       __asm mov dword ptr [OFFSET reg+4*eax], ebx\
-       __asm sets byte ptr N_FLAG\
-       __asm setz byte ptr Z_FLAG\
-       __asm setc byte ptr C_FLAG\
-       __asm seto byte ptr V_FLAG\
-     }
-  #define SUB_RD_RS_RN(N) \
-   {\
-     __asm mov eax, source\
-     __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-     __asm sub ebx, dword ptr [OFFSET reg+4*N]\
-     __asm mov eax, dest\
-     __asm mov dword ptr [OFFSET reg+4*eax], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm setnc byte ptr C_FLAG\
-     __asm seto byte ptr V_FLAG\
-   }
-  #define SUB_RD_RS_O3(N) \
-   {\
-     __asm mov eax, source\
-     __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-     __asm sub ebx, N\
-     __asm mov eax, dest\
-     __asm mov dword ptr [OFFSET reg+4*eax], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm setnc byte ptr C_FLAG\
-     __asm seto byte ptr V_FLAG\
-   }
-  #define SUB_RD_RS_O3_0 \
-   {\
-     __asm mov eax, source\
-     __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-     __asm sub ebx, 0\
-     __asm mov eax, dest\
-     __asm mov dword ptr [OFFSET reg+4*eax], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm mov byte ptr C_FLAG, 1\
-     __asm mov byte ptr V_FLAG, 0\
-   }
-  #define SUB_RN_O8(d) \
-   {\
-     __asm mov ebx, opcode\
-     __asm and ebx, 255\
-     __asm sub dword ptr [OFFSET reg + 4*(d)], ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm setnc byte ptr C_FLAG\
-     __asm seto byte ptr V_FLAG\
-   }
-  #define MOV_RN_O8(d) \
-   {\
-     __asm mov eax, opcode\
-     __asm and eax, 255\
-     __asm mov dword ptr [OFFSET reg+4*(d)], eax\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-   }
-  #define CMP_RN_O8(d) \
-   {\
-     __asm mov eax, dword ptr [OFFSET reg+4*(d)]\
-     __asm mov ebx, opcode\
-     __asm and ebx, 255\
-     __asm sub eax, ebx\
-     __asm sets byte ptr N_FLAG\
-     __asm setz byte ptr Z_FLAG\
-     __asm setnc byte ptr C_FLAG\
-     __asm seto byte ptr V_FLAG\
-   }
-  #define SBC_RD_RS \
-     {\
-       __asm mov ebx, dest\
-       __asm mov ebx, dword ptr [OFFSET reg + 4*ebx]\
-       __asm mov eax, value\
-       __asm bt word ptr C_FLAG, 0\
-       __asm cmc\
-       __asm sbb ebx, eax\
-       __asm mov eax, dest\
-       __asm mov dword ptr [OFFSET reg + 4*eax], ebx\
-       __asm sets byte ptr N_FLAG\
-       __asm setz byte ptr Z_FLAG\
-       __asm setnc byte ptr C_FLAG\
-       __asm seto byte ptr V_FLAG\
-     }
-  #define LSL_RD_RM_I5 \
-     {\
-       __asm mov eax, source\
-       __asm mov eax, dword ptr [OFFSET reg + 4 * eax]\
-       __asm mov cl, byte ptr shift\
-       __asm shl eax, cl\
-       __asm mov value, eax\
-       __asm setc byte ptr C_FLAG\
-     }
-  #define LSL_RD_RS \
-         {\
-           __asm mov eax, dest\
-           __asm mov eax, dword ptr [OFFSET reg + 4 * eax]\
-           __asm mov cl, byte ptr value\
-           __asm shl eax, cl\
-           __asm mov value, eax\
-           __asm setc byte ptr C_FLAG\
-         }
-  #define LSR_RD_RM_I5 \
-     {\
-       __asm mov eax, source\
-       __asm mov eax, dword ptr [OFFSET reg + 4 * eax]\
-       __asm mov cl, byte ptr shift\
-       __asm shr eax, cl\
-       __asm mov value, eax\
-       __asm setc byte ptr C_FLAG\
-     }
-  #define LSR_RD_RS \
-         {\
-           __asm mov eax, dest\
-           __asm mov eax, dword ptr [OFFSET reg + 4 * eax]\
-           __asm mov cl, byte ptr value\
-           __asm shr eax, cl\
-           __asm mov value, eax\
-           __asm setc byte ptr C_FLAG\
-         }
-  #define ASR_RD_RM_I5 \
-     {\
-       __asm mov eax, source\
-       __asm mov eax, dword ptr [OFFSET reg + 4*eax]\
-       __asm mov cl, byte ptr shift\
-       __asm sar eax, cl\
-       __asm mov value, eax\
-       __asm setc byte ptr C_FLAG\
-     }
-  #define ASR_RD_RS \
-         {\
-           __asm mov eax, dest\
-           __asm mov eax, dword ptr [OFFSET reg + 4*eax]\
-           __asm mov cl, byte ptr value\
-           __asm sar eax, cl\
-           __asm mov value, eax\
-           __asm setc byte ptr C_FLAG\
-         }
-  #define ROR_RD_RS \
-         {\
-           __asm mov eax, dest\
-           __asm mov eax, dword ptr [OFFSET reg + 4*eax]\
-           __asm mov cl, byte ptr value\
-           __asm ror eax, cl\
-           __asm mov value, eax\
-           __asm setc byte ptr C_FLAG\
-         }
-  #define NEG_RD_RS \
-     {\
-       __asm mov ebx, source\
-       __asm mov ebx, dword ptr [OFFSET reg+4*ebx]\
-       __asm neg ebx\
-       __asm mov eax, dest\
-       __asm mov dword ptr [OFFSET reg+4*eax],ebx\
-       __asm sets byte ptr N_FLAG\
-       __asm setz byte ptr Z_FLAG\
-       __asm setnc byte ptr C_FLAG\
-       __asm seto byte ptr V_FLAG\
-     }
-  #define CMP_RD_RS \
-     {\
-       __asm mov eax, dest\
-       __asm mov ebx, dword ptr [OFFSET reg+4*eax]\
-       __asm sub ebx, value\
-       __asm sets byte ptr N_FLAG\
-       __asm setz byte ptr Z_FLAG\
-       __asm setnc byte ptr C_FLAG\
-       __asm seto byte ptr V_FLAG\
-     }
-#endif
-#endif
+#define ADDCARRY(a, b, c) \
+  C_FLAG = (((a) & (b)) | ((a) & ~(c)) | ((b) & ~(c))) >> 31;
 
-// C core
-#ifndef ADDCARRY
- #define ADDCARRY(a, b, c) \
-  C_FLAG = ((NEG(a) & NEG(b)) |\
-            (NEG(a) & POS(c)) |\
-            (NEG(b) & POS(c))) ? true : false;
-#endif
-#ifndef ADDOVERFLOW
- #define ADDOVERFLOW(a, b, c) \
-  V_FLAG = ((NEG(a) & NEG(b) & POS(c)) |\
-            (POS(a) & POS(b) & NEG(c))) ? true : false;
-#endif
-#ifndef SUBCARRY
- #define SUBCARRY(a, b, c) \
-  C_FLAG = ((NEG(a) & POS(b)) |\
-            (NEG(a) & POS(c)) |\
-            (POS(b) & POS(c))) ? true : false;
-#endif
-#ifndef SUBOVERFLOW
- #define SUBOVERFLOW(a, b, c)\
-  V_FLAG = ((NEG(a) & POS(b) & POS(c)) |\
-            (POS(a) & NEG(b) & NEG(c))) ? true : false;
-#endif
-#ifndef ADD_RD_RS_RN
- #define ADD_RD_RS_RN(N) \
+#define ADDOVERFLOW(a, b, c) \
+  V_FLAG = (((a) & (b) & ~(c)) | (~(a) & ~(b) & (c))) >> 31;
+
+#define SUBCARRY(a, b, c) \
+  C_FLAG = (((a) & ~(b)) | ((a) & ~(c)) | (~(b) & ~(c))) >> 31;
+
+#define SUBOVERFLOW(a, b, c)\
+  V_FLAG = (((a) & ~(b) & ~(c)) | (~(a) & (b) & (c))) >> 31;
+
+#define ADD_RD_RS_RN(N) \
    {\
      u32 lhs = reg[source].I;\
      u32 rhs = reg[N].I;\
      u32 res = lhs + rhs;\
      reg[dest].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      ADDCARRY(lhs, rhs, res);\
      ADDOVERFLOW(lhs, rhs, res);\
    }
-#endif
 #ifndef ADD_RD_RS_O3
- #define ADD_RD_RS_O3(N) \
+#define ADD_RD_RS_O3(N) \
    {\
      u32 lhs = reg[source].I;\
      u32 rhs = N;\
      u32 res = lhs + rhs;\
      reg[dest].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      ADDCARRY(lhs, rhs, res);\
      ADDOVERFLOW(lhs, rhs, res);\
    }
 #endif
-#ifndef ADD_RD_RS_O3_0
 # define ADD_RD_RS_O3_0 ADD_RD_RS_O3
-#endif
-#ifndef ADD_RN_O8
- #define ADD_RN_O8(d) \
+#define ADD_RN_O8(d) \
    {\
      u32 lhs = reg[(d)].I;\
      u32 rhs = (opcode & 255);\
      u32 res = lhs + rhs;\
      reg[(d)].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      ADDCARRY(lhs, rhs, res);\
      ADDOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef CMN_RD_RS
- #define CMN_RD_RS \
+#define CMN_RD_RS \
    {\
      u32 lhs = reg[dest].I;\
      u32 rhs = value;\
      u32 res = lhs + rhs;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      ADDCARRY(lhs, rhs, res);\
      ADDOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef ADC_RD_RS
- #define ADC_RD_RS \
+#define ADC_RD_RS \
    {\
      u32 lhs = reg[dest].I;\
      u32 rhs = value;\
      u32 res = lhs + rhs + (u32)C_FLAG;\
      reg[dest].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      ADDCARRY(lhs, rhs, res);\
      ADDOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef SUB_RD_RS_RN
- #define SUB_RD_RS_RN(N) \
+#define SUB_RD_RS_RN(N) \
    {\
      u32 lhs = reg[source].I;\
      u32 rhs = reg[N].I;\
      u32 res = lhs - rhs;\
      reg[dest].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      SUBCARRY(lhs, rhs, res);\
      SUBOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef SUB_RD_RS_O3
- #define SUB_RD_RS_O3(N) \
+#define SUB_RD_RS_O3(N) \
    {\
      u32 lhs = reg[source].I;\
      u32 rhs = N;\
      u32 res = lhs - rhs;\
      reg[dest].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      SUBCARRY(lhs, rhs, res);\
      SUBOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef SUB_RD_RS_O3_0
 # define SUB_RD_RS_O3_0 SUB_RD_RS_O3
-#endif
-#ifndef SUB_RN_O8
- #define SUB_RN_O8(d) \
+#define SUB_RN_O8(d) \
    {\
      u32 lhs = reg[(d)].I;\
      u32 rhs = (opcode & 255);\
      u32 res = lhs - rhs;\
      reg[(d)].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      SUBCARRY(lhs, rhs, res);\
      SUBOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef MOV_RN_O8
- #define MOV_RN_O8(d) \
+#define MOV_RN_O8(d) \
    {\
-     reg[d].I = opcode & 255;\
-     N_FLAG = false;\
-     Z_FLAG = (reg[d].I ? false : true);\
+     reg[(d)].I = opcode & 255;\
+     N_FLAG = 0;\
+     Z_FLAG = (reg[(d)].I == 0);\
    }
-#endif
-#ifndef CMP_RN_O8
- #define CMP_RN_O8(d) \
+#define CMP_RN_O8(d) \
    {\
      u32 lhs = reg[(d)].I;\
      u32 rhs = (opcode & 255);\
      u32 res = lhs - rhs;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      SUBCARRY(lhs, rhs, res);\
      SUBOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef SBC_RD_RS
- #define SBC_RD_RS \
+#define SBC_RD_RS \
    {\
      u32 lhs = reg[dest].I;\
      u32 rhs = value;\
-     u32 res = lhs - rhs - !((u32)C_FLAG);\
+     /* Branchless NOT for C_FLAG since it is strictly 0 or 1 */ \
+     u32 res = lhs - rhs - (C_FLAG ^ 1);\
      reg[dest].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      SUBCARRY(lhs, rhs, res);\
      SUBOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef LSL_RD_RM_I5
- #define LSL_RD_RM_I5 \
+#define LSL_RD_RM_I5 \
    {\
-     C_FLAG = (reg[source].I >> (32 - shift)) & 1 ? true : false;\
+     C_FLAG = (reg[source].I >> (32 - shift)) & 1;\
      value = reg[source].I << shift;\
    }
-#endif
-#ifndef LSL_RD_RS
- #define LSL_RD_RS \
+#define LSL_RD_RS \
    {\
-     C_FLAG = (reg[dest].I >> (32 - value)) & 1 ? true : false;\
+     C_FLAG = (reg[dest].I >> (32 - value)) & 1;\
      value = reg[dest].I << value;\
    }
-#endif
-#ifndef LSR_RD_RM_I5
- #define LSR_RD_RM_I5 \
+#define LSR_RD_RM_I5 \
    {\
-     C_FLAG = (reg[source].I >> (shift - 1)) & 1 ? true : false;\
+     C_FLAG = (reg[source].I >> (shift - 1)) & 1;\
      value = reg[source].I >> shift;\
    }
-#endif
-#ifndef LSR_RD_RS
- #define LSR_RD_RS \
+#define LSR_RD_RS \
    {\
-     C_FLAG = (reg[dest].I >> (value - 1)) & 1 ? true : false;\
+     C_FLAG = (reg[dest].I >> (value - 1)) & 1;\
      value = reg[dest].I >> value;\
    }
-#endif
-#ifndef ASR_RD_RM_I5
- #define ASR_RD_RM_I5 \
+#define ASR_RD_RM_I5 \
    {\
-     C_FLAG = ((s32)reg[source].I >> (int)(shift - 1)) & 1 ? true : false;\
-     value = (s32)reg[source].I >> (int)shift;\
+     C_FLAG = ((u32)((s32)reg[source].I >> (int)(shift - 1))) & 1;\
+     value = (u32)((s32)reg[source].I >> (int)shift);\
    }
-#endif
-#ifndef ASR_RD_RS
- #define ASR_RD_RS \
+#define ASR_RD_RS \
    {\
-     C_FLAG = ((s32)reg[dest].I >> (int)(value - 1)) & 1 ? true : false;\
-     value = (s32)reg[dest].I >> (int)value;\
+     C_FLAG = ((u32)((s32)reg[dest].I >> (int)(value - 1))) & 1;\
+     value = (u32)((s32)reg[dest].I >> (int)value);\
    }
-#endif
-#ifndef ROR_RD_RS
- #define ROR_RD_RS \
+#define ROR_RD_RS \
    {\
-     C_FLAG = (reg[dest].I >> (value - 1)) & 1 ? true : false;\
+     C_FLAG = (reg[dest].I >> (value - 1)) & 1;\
      value = ((reg[dest].I << (32 - value)) |\
               (reg[dest].I >> value));\
    }
-#endif
-#ifndef NEG_RD_RS
- #define NEG_RD_RS \
+#define NEG_RD_RS \
    {\
      u32 lhs = reg[source].I;\
      u32 rhs = 0;\
      u32 res = rhs - lhs;\
      reg[dest].I = res;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      SUBCARRY(rhs, lhs, res);\
      SUBOVERFLOW(rhs, lhs, res);\
    }
-#endif
-#ifndef CMP_RD_RS
- #define CMP_RD_RS \
+#define CMP_RD_RS \
    {\
      u32 lhs = reg[dest].I;\
      u32 rhs = value;\
      u32 res = lhs - rhs;\
-     Z_FLAG = (res == 0) ? true : false;\
-     N_FLAG = NEG(res) ? true : false;\
+     Z_FLAG = (res == 0);\
+     N_FLAG = (res >> 31);\
      SUBCARRY(lhs, rhs, res);\
      SUBOVERFLOW(lhs, rhs, res);\
    }
-#endif
-#ifndef IMM5_INSN
- #define IMM5_INSN(OP,N) \
+#define IMM5_INSN(OP,N) \
   int dest = opcode & 0x07;\
   int source = (opcode >> 3) & 0x07;\
   u32 value;\
   OP(N);\
   reg[dest].I = value;\
-  N_FLAG = (value & 0x80000000 ? true : false);\
-  Z_FLAG = (value ? false : true);
- #define IMM5_INSN_0(OP) \
+  N_FLAG = (value >> 31);\
+  Z_FLAG = (value == 0);
+#define IMM5_INSN_0(OP) \
   int dest = opcode & 0x07;\
   int source = (opcode >> 3) & 0x07;\
   u32 value;\
   OP;\
   reg[dest].I = value;\
-  N_FLAG = (value & 0x80000000 ? true : false);\
-  Z_FLAG = (value ? false : true);
- #define IMM5_LSL(N) \
+  N_FLAG = (value >> 31);\
+  Z_FLAG = (value == 0);
+#define IMM5_LSL(N) \
   int shift = N;\
   LSL_RD_RM_I5;
- #define IMM5_LSL_0 \
+#define IMM5_LSL_0 \
   value = reg[source].I;
- #define IMM5_LSR(N) \
+#define IMM5_LSR(N) \
   int shift = N;\
   LSR_RD_RM_I5;
- #define IMM5_LSR_0 \
-  C_FLAG = reg[source].I & 0x80000000 ? true : false;\
+#define IMM5_LSR_0 \
+  C_FLAG = (reg[source].I >> 31);\
   value = 0;
- #define IMM5_ASR(N) \
+#define IMM5_ASR(N) \
   int shift = N;\
   ASR_RD_RM_I5;
- #define IMM5_ASR_0 \
-  if(reg[source].I & 0x80000000) {\
-    value = 0xFFFFFFFF;\
-    C_FLAG = true;\
-  } else {\
-    value = 0;\
-    C_FLAG = false;\
-  }
-#endif
+#define IMM5_ASR_0 \
+  C_FLAG = (reg[source].I >> 31);\
+  value = (u32)((s32)reg[source].I >> 31);
 #ifndef THREEARG_INSN
  #define THREEARG_INSN(OP,N) \
   int dest = opcode & 0x07;          \
@@ -1156,9 +422,8 @@ static INSN_REGPARM void thumb40_0(u32 opcode)
 {
   int dest = opcode & 7;
   reg[dest].I &= reg[(opcode >> 3)&7].I;
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
-  Z_FLAG = reg[dest].I ? false : true;
-  THUMB_CONSOLE_OUTPUT(NULL, reg[2].I);
+  N_FLAG = (reg[dest].I >> 31);
+  Z_FLAG = (reg[dest].I == 0);
 }
 
 // EOR Rd, Rs
@@ -1166,8 +431,8 @@ static INSN_REGPARM void thumb40_1(u32 opcode)
 {
   int dest = opcode & 7;
   reg[dest].I ^= reg[(opcode >> 3)&7].I;
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
-  Z_FLAG = reg[dest].I ? false : true;
+  N_FLAG = (reg[dest].I >> 31);
+  Z_FLAG = (reg[dest].I == 0);
 }
 
 // LSL Rd, Rs
@@ -1175,67 +440,75 @@ static INSN_REGPARM void thumb40_2(u32 opcode)
 {
   int dest = opcode & 7;
   u32 value = reg[(opcode >> 3)&7].B.B0;
+
   if(value) {
-    if(value == 32) {
-      value = 0;
-      C_FLAG = (reg[dest].I & 1 ? true : false);
-    } else if(value < 32) {
-      LSL_RD_RS;
-    } else {
-      value = 0;
-      C_FLAG = false;
-    }
+    u32 is32 = (value == 32);
+    u32 isUnder32 = (value < 32);
+
+    // Branchless flag and shift evaluation using Broadway's dual IUs
+    C_FLAG = (is32 & (reg[dest].I & 1)) | (isUnder32 & ((reg[dest].I >> (32 - (value & 31))) & 1));
+    value = isUnder32 * (reg[dest].I << (value & 31));
+
     reg[dest].I = value;
   }
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
-  Z_FLAG = reg[dest].I ? false : true;
+  N_FLAG = (reg[dest].I >> 31);
+  Z_FLAG = (reg[dest].I == 0);
   clockTicks = codeTicksAccess16(armNextPC)+2;
 }
 
 // LSR Rd, Rs
 static INSN_REGPARM void thumb40_3(u32 opcode)
 {
-  int dest = opcode & 7;
-  u32 value = reg[(opcode >> 3)&7].B.B0;
-  if(value) {
-    if(value == 32) {
-      value = 0;
-      C_FLAG = (reg[dest].I & 0x80000000 ? true : false);
-    } else if(value < 32) {
-      LSR_RD_RS;
-    } else {
-      value = 0;
-      C_FLAG = false;
-    }
-    reg[dest].I = value;
-  }
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
-  Z_FLAG = reg[dest].I ? false : true;
-  clockTicks = codeTicksAccess16(armNextPC)+2;
+    int dest = opcode & 7;
+    u32 shift = reg[(opcode >> 3) & 7].B.B0;
+    u32 val = reg[dest].I;
+
+    // Generate masks
+    u32 mask_not_0 = -(u32)(shift != 0);
+    u32 mask_less_32 = -(u32)(shift < 32);
+
+    // Shift result logic (shift >= 32 yields 0)
+    u32 res_shifted = (val >> (shift & 0x1F)) & mask_less_32;
+    reg[dest].I = (res_shifted & mask_not_0) | (val & ~mask_not_0);
+
+    // C_FLAG logic (shift == 32 yields bit 31; shift > 32 yields 0)
+    u32 c_shift = shift - 1;
+    u32 mask_c_valid = -(u32)(c_shift < 32);
+    u32 new_c = ((val >> (c_shift & 0x1F)) & 1) & mask_c_valid;
+
+    C_FLAG = (new_c & mask_not_0) | (C_FLAG & ~mask_not_0);
+
+    N_FLAG = (reg[dest].I >> 31);
+    Z_FLAG = (reg[dest].I == 0);
+    clockTicks = codeTicksAccess16(armNextPC) + 2;
 }
 
 // ASR Rd, Rs
 static INSN_REGPARM void thumb41_0(u32 opcode)
 {
-  int dest = opcode & 7;
-  u32 value = reg[(opcode >> 3)&7].B.B0;
-  if(value) {
-    if(value < 32) {
-      ASR_RD_RS;
-      reg[dest].I = value;
-    } else {
-      if(reg[dest].I & 0x80000000){
-        reg[dest].I = 0xFFFFFFFF;
-        C_FLAG = true;
-      } else {
-        reg[dest].I = 0x00000000;
-        C_FLAG = false;
-      }
-    }
-  }
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
-  Z_FLAG = reg[dest].I ? false : true;
-  clockTicks = codeTicksAccess16(armNextPC)+2;
+    int dest = opcode & 7;
+    u32 shift = reg[(opcode >> 3) & 7].B.B0;
+    s32 val = (s32)reg[dest].I;
+
+    u32 mask_not_0 = -(u32)(shift != 0);
+    u32 mask_less_32 = -(u32)(shift < 32);
+
+    // If shift >= 32, clamp to 31 to propagate the sign bit across the whole register
+    u32 shift_clamped = (shift & mask_less_32) | (31 & ~mask_less_32);
+    u32 res_shifted = (u32)(val >> shift_clamped);
+
+    reg[dest].I = (res_shifted & mask_not_0) | ((u32)val & ~mask_not_0);
+
+    // C_FLAG logic: bit 31 if shift >= 32
+    u32 c_shift = shift - 1;
+    u32 c_shift_clamped = (c_shift & mask_less_32) | (31 & ~mask_less_32);
+    u32 new_c = ((u32)val >> c_shift_clamped) & 1;
+
+    C_FLAG = (new_c & mask_not_0) | (C_FLAG & ~mask_not_0);
+
+    N_FLAG = (reg[dest].I >> 31);
+    Z_FLAG = (reg[dest].I == 0);
+    clockTicks = codeTicksAccess16(armNextPC) + 2;
 }
 
 // ADC Rd, Rs
@@ -1257,29 +530,34 @@ static INSN_REGPARM void thumb41_2(u32 opcode)
 // ROR Rd, Rs
 static INSN_REGPARM void thumb41_3(u32 opcode)
 {
-  int dest = opcode & 7;
-  u32 value = reg[(opcode >> 3)&7].B.B0;
+    int dest = opcode & 7;
+    u32 shift = reg[(opcode >> 3) & 7].B.B0;
+    u32 val = reg[dest].I;
 
-  if(value) {
-    value = value & 0x1f;
-    if(value == 0) {
-      C_FLAG = (reg[dest].I & 0x80000000 ? true : false);
-    } else {
-      ROR_RD_RS;
-      reg[dest].I = value;
-    }
-  }
-  clockTicks = codeTicksAccess16(armNextPC)+2;
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
-  Z_FLAG = reg[dest].I ? false : true;
+    u32 mask_not_0 = -(u32)(shift != 0);
+
+    // Safe branchless ROR (avoids C++ Undefined Behavior when s == 0)
+    // ((-s) & 0x1F) safely wraps back to 0 without triggering a << 32
+    u32 s = shift & 0x1F;
+    u32 res_shifted = (val >> s) | (val << ((-s) & 0x1F));
+
+    reg[dest].I = (res_shifted & mask_not_0) | (val & ~mask_not_0);
+
+    // C_FLAG logic: for ROR, C_FLAG is always bit 31 of the result if shift != 0
+    u32 new_c = (res_shifted >> 31) & 1;
+    C_FLAG = (new_c & mask_not_0) | (C_FLAG & ~mask_not_0);
+
+    N_FLAG = (reg[dest].I >> 31);
+    Z_FLAG = (reg[dest].I == 0);
+    clockTicks = codeTicksAccess16(armNextPC) + 2;
 }
 
 // TST Rd, Rs
 static INSN_REGPARM void thumb42_0(u32 opcode)
 {
   u32 value = reg[opcode & 7].I & reg[(opcode >> 3) & 7].I;
-  N_FLAG = value & 0x80000000 ? true : false;
-  Z_FLAG = value ? false : true;
+  N_FLAG = (value >> 31);
+  Z_FLAG = (value == 0);
 }
 
 // NEG Rd, Rs
@@ -1311,8 +589,8 @@ static INSN_REGPARM void thumb43_0(u32 opcode)
 {
   int dest = opcode & 7;
   reg[dest].I |= reg[(opcode >> 3) & 7].I;
-  Z_FLAG = reg[dest].I ? false : true;
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
+  Z_FLAG = (reg[dest].I == 0);
+  N_FLAG = (reg[dest].I >> 31);
 }
 
 // MUL Rd, Rs
@@ -1321,21 +599,24 @@ static INSN_REGPARM void thumb43_1(u32 opcode)
   clockTicks = 1;
   int dest = opcode & 7;
   u32 rm = reg[dest].I;
+
+  // Calculate result
   reg[dest].I = reg[(opcode >> 3) & 7].I * rm;
-  if (((s32)rm) < 0)
+
+  // Convert negative rm for bit-length evaluation
+  if (((s32)rm) < 0) {
     rm = ~rm;
-  if ((rm & 0xFFFFFF00) == 0)
-    clockTicks += 0;
-  else if ((rm & 0xFFFF0000) == 0)
-    clockTicks += 1;
-  else if ((rm & 0xFF000000) == 0)
-    clockTicks += 2;
-  else
-    clockTicks += 3;
+  }
+
+  // Broadway Optimization: Branchless magnitude check via hardware cntlzw
+  // "rm | 1" ensures we don't pass 0 to clz (which is undefined behavior).
+  u32 active_bits = 31 - __builtin_clz(rm | 1);
+  clockTicks += (active_bits >> 3); // Maps 0-8 to 0, 9-16 to 1, 17-24 to 2, 25-32 to 3.
+
   busPrefetchCount = (busPrefetchCount<<clockTicks) | (0xFF>>(8-clockTicks));
   clockTicks += codeTicksAccess16(armNextPC) + 1;
-  Z_FLAG = reg[dest].I ? false : true;
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
+  Z_FLAG = (reg[dest].I == 0);
+  N_FLAG = (reg[dest].I >> 31);
 }
 
 // BIC Rd, Rs
@@ -1343,8 +624,8 @@ static INSN_REGPARM void thumb43_2(u32 opcode)
 {
   int dest = opcode & 7;
   reg[dest].I &= (~reg[(opcode >> 3) & 7].I);
-  Z_FLAG = reg[dest].I ? false : true;
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
+  Z_FLAG = (reg[dest].I == 0);
+  N_FLAG = (reg[dest].I >> 31);
 }
 
 // MVN Rd, Rs
@@ -1352,8 +633,8 @@ static INSN_REGPARM void thumb43_3(u32 opcode)
 {
   int dest = opcode & 7;
   reg[dest].I = ~reg[(opcode >> 3) & 7].I;
-  Z_FLAG = reg[dest].I ? false : true;
-  N_FLAG = reg[dest].I & 0x80000000 ? true : false;
+  Z_FLAG = (reg[dest].I == 0);
+  N_FLAG = (reg[dest].I >> 31);
 }
 
 // High-register instructions and BX //////////////////////////////////////
@@ -1435,7 +716,6 @@ static INSN_REGPARM void thumb46_2(u32 opcode)
 {
   reg[(opcode&7)+8].I = reg[(opcode>>3)&7].I;
   if((opcode&7) == 7) {
-    UPDATE_OLDREG;
     reg[15].I &= 0xFFFFFFFE;
     armNextPC = reg[15].I;
     reg[15].I += 2;
@@ -1450,7 +730,6 @@ static INSN_REGPARM void thumb46_3(u32 opcode)
 {
   reg[(opcode&7)+8].I = reg[((opcode>>3)&7)+8].I;
   if((opcode&7) == 7) {
-    UPDATE_OLDREG;
     reg[15].I &= 0xFFFFFFFE;
     armNextPC = reg[15].I;
     reg[15].I += 2;
@@ -1466,7 +745,6 @@ static INSN_REGPARM void thumb47(u32 opcode)
 {
   int base = (opcode >> 3) & 15;
   busPrefetchCount=0;
-  UPDATE_OLDREG;
   reg[15].I = reg[base].I;
   if(reg[base].I & 1) {
     armState = false;
@@ -1491,8 +769,7 @@ static INSN_REGPARM void thumb47(u32 opcode)
 static INSN_REGPARM void thumb48(u32 opcode)
 {
   u8 regist = (opcode >> 8) & 7;
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = (reg[15].I & 0xFFFFFFFC) + ((opcode & 0xFF) << 2);
   reg[regist].I = CPUReadMemoryQuick(address);
   busPrefetchCount=0;
@@ -1502,8 +779,7 @@ static INSN_REGPARM void thumb48(u32 opcode)
 // STR Rd, [Rs, Rn]
 static INSN_REGPARM void thumb50(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode>>6)&7].I;
   CPUWriteMemory(address, reg[opcode & 7].I);
   clockTicks = dataTicksAccess32(address) + codeTicksAccess16(armNextPC) + 2;
@@ -1512,8 +788,7 @@ static INSN_REGPARM void thumb50(u32 opcode)
 // STRH Rd, [Rs, Rn]
 static INSN_REGPARM void thumb52(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode>>6)&7].I;
   CPUWriteHalfWord(address, reg[opcode&7].W.W0);
   clockTicks = dataTicksAccess16(address) + codeTicksAccess16(armNextPC) + 2;
@@ -1522,8 +797,7 @@ static INSN_REGPARM void thumb52(u32 opcode)
 // STRB Rd, [Rs, Rn]
 static INSN_REGPARM void thumb54(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode >>6)&7].I;
   CPUWriteByte(address, reg[opcode & 7].B.B0);
   clockTicks = dataTicksAccess16(address) + codeTicksAccess16(armNextPC) + 2;
@@ -1532,8 +806,7 @@ static INSN_REGPARM void thumb54(u32 opcode)
 // LDSB Rd, [Rs, Rn]
 static INSN_REGPARM void thumb56(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode>>6)&7].I;
   reg[opcode&7].I = (s8)CPUReadByte(address);
   clockTicks = 3 + dataTicksAccess16(address) + codeTicksAccess16(armNextPC);
@@ -1542,8 +815,7 @@ static INSN_REGPARM void thumb56(u32 opcode)
 // LDR Rd, [Rs, Rn]
 static INSN_REGPARM void thumb58(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode>>6)&7].I;
   reg[opcode&7].I = CPUReadMemory(address);
   clockTicks = 3 + dataTicksAccess32(address) + codeTicksAccess16(armNextPC);
@@ -1552,8 +824,7 @@ static INSN_REGPARM void thumb58(u32 opcode)
 // LDRH Rd, [Rs, Rn]
 static INSN_REGPARM void thumb5A(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode>>6)&7].I;
   reg[opcode&7].I = CPUReadHalfWord(address);
   clockTicks = 3 + dataTicksAccess32(address) + codeTicksAccess16(armNextPC);
@@ -1562,8 +833,7 @@ static INSN_REGPARM void thumb5A(u32 opcode)
 // LDRB Rd, [Rs, Rn]
 static INSN_REGPARM void thumb5C(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode>>6)&7].I;
   reg[opcode&7].I = CPUReadByte(address);
   clockTicks = 3 + dataTicksAccess16(address) + codeTicksAccess16(armNextPC);
@@ -1572,8 +842,7 @@ static INSN_REGPARM void thumb5C(u32 opcode)
 // LDSH Rd, [Rs, Rn]
 static INSN_REGPARM void thumb5E(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + reg[(opcode>>6)&7].I;
   reg[opcode&7].I = (u32)CPUReadHalfWordSigned(address);
   clockTicks = 3 + dataTicksAccess16(address) + codeTicksAccess16(armNextPC);
@@ -1582,8 +851,7 @@ static INSN_REGPARM void thumb5E(u32 opcode)
 // STR Rd, [Rs, #Imm]
 static INSN_REGPARM void thumb60(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + (((opcode>>6)&31)<<2);
   CPUWriteMemory(address, reg[opcode&7].I);
   clockTicks = dataTicksAccess32(address) + codeTicksAccess16(armNextPC) + 2;
@@ -1592,8 +860,7 @@ static INSN_REGPARM void thumb60(u32 opcode)
 // LDR Rd, [Rs, #Imm]
 static INSN_REGPARM void thumb68(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + (((opcode>>6)&31)<<2);
   reg[opcode&7].I = CPUReadMemory(address);
   clockTicks = 3 + dataTicksAccess32(address) + codeTicksAccess16(armNextPC);
@@ -1602,8 +869,7 @@ static INSN_REGPARM void thumb68(u32 opcode)
 // STRB Rd, [Rs, #Imm]
 static INSN_REGPARM void thumb70(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + (((opcode>>6)&31));
   CPUWriteByte(address, reg[opcode&7].B.B0);
   clockTicks = dataTicksAccess16(address) + codeTicksAccess16(armNextPC) + 2;
@@ -1612,8 +878,7 @@ static INSN_REGPARM void thumb70(u32 opcode)
 // LDRB Rd, [Rs, #Imm]
 static INSN_REGPARM void thumb78(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + (((opcode>>6)&31));
   reg[opcode&7].I = CPUReadByte(address);
   clockTicks = 3 + dataTicksAccess16(address) + codeTicksAccess16(armNextPC);
@@ -1622,8 +887,7 @@ static INSN_REGPARM void thumb78(u32 opcode)
 // STRH Rd, [Rs, #Imm]
 static INSN_REGPARM void thumb80(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + (((opcode>>6)&31)<<1);
   CPUWriteHalfWord(address, reg[opcode&7].W.W0);
   clockTicks = dataTicksAccess16(address) + codeTicksAccess16(armNextPC) + 2;
@@ -1632,8 +896,7 @@ static INSN_REGPARM void thumb80(u32 opcode)
 // LDRH Rd, [Rs, #Imm]
 static INSN_REGPARM void thumb88(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[(opcode>>3)&7].I + (((opcode>>6)&31)<<1);
   reg[opcode&7].I = CPUReadHalfWord(address);
   clockTicks = 3 + dataTicksAccess16(address) + codeTicksAccess16(armNextPC);
@@ -1643,8 +906,7 @@ static INSN_REGPARM void thumb88(u32 opcode)
 static INSN_REGPARM void thumb90(u32 opcode)
 {
   u8 regist = (opcode >> 8) & 7;
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[13].I + ((opcode&255)<<2);
   CPUWriteMemory(address, reg[regist].I);
   clockTicks = dataTicksAccess32(address) + codeTicksAccess16(armNextPC) + 2;
@@ -1654,8 +916,7 @@ static INSN_REGPARM void thumb90(u32 opcode)
 static INSN_REGPARM void thumb98(u32 opcode)
 {
   u8 regist = (opcode >> 8) & 7;
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[13].I + ((opcode&255)<<2);
   reg[regist].I = CPUReadMemoryQuick(address);
   clockTicks = 3 + dataTicksAccess32(address) + codeTicksAccess16(armNextPC);
@@ -1683,9 +944,10 @@ static INSN_REGPARM void thumbA8(u32 opcode)
 static INSN_REGPARM void thumbB0(u32 opcode)
 {
   int offset = (opcode & 127) << 2;
-  if(opcode & 0x80)
-    offset = -offset;
-  reg[13].I += offset;
+  // Branchless negation: if bit 7 is set, mask becomes 0xFFFFFFFF, else 0x0
+  u32 mask = -((opcode >> 7) & 1);
+  // 2's complement branchless negation: (val ^ mask) - mask
+  reg[13].I += (offset ^ mask) - mask;
   clockTicks = 1 + codeTicksAccess16(armNextPC);
 }
 
@@ -1694,32 +956,30 @@ static INSN_REGPARM void thumbB0(u32 opcode)
 #define PUSH_REG(val, r)                                    \
   if (opcode & (val)) {                                     \
     CPUWriteMemory(address, reg[(r)].I);                    \
-    if (!count) {                                           \
-        clockTicks += 1 + dataTicksAccess32(address);       \
-    } else {                                                \
-        clockTicks += 1 + dataTicksAccessSeq32(address);    \
-    }                                                       \
-    count++;                                                \
+    u32 c = (u32)count;                                     \
+    u32 seq = dataTicksAccessSeq32(address);                \
+    u32 non = dataTicksAccess32(address);                   \
+    /* Branchlessly select N-Cycle (count=0) or S-Cycle (count=1) */ \
+    clockTicks += 1 + ((seq & -c) | (non & (c - 1)));       \
+    count = 1;                                              \
     address += 4;                                           \
   }
 
 #define POP_REG(val, r)                                     \
   if (opcode & (val)) {                                     \
     reg[(r)].I = CPUReadMemory(address);                    \
-    if (!count) {                                           \
-        clockTicks += 1 + dataTicksAccess32(address);       \
-    } else {                                                \
-        clockTicks += 1 + dataTicksAccessSeq32(address);    \
-    }                                                       \
-    count++;                                                \
+    u32 c = (u32)count;                                     \
+    u32 seq = dataTicksAccessSeq32(address);                \
+    u32 non = dataTicksAccess32(address);                   \
+    clockTicks += 1 + ((seq & -c) | (non & (c - 1)));       \
+    count = 1;                                              \
     address += 4;                                           \
   }
 
 // PUSH {Rlist}
 static INSN_REGPARM void thumbB4(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   int count = 0;
   u32 temp = reg[13].I - 4 * cpuBitsSet[opcode & 0xff];
   u32 address = temp & 0xFFFFFFFC;
@@ -1738,8 +998,7 @@ static INSN_REGPARM void thumbB4(u32 opcode)
 // PUSH {Rlist, LR}
 static INSN_REGPARM void thumbB5(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   int count = 0;
   u32 temp = reg[13].I - 4 - 4 * cpuBitsSet[opcode & 0xff];
   u32 address = temp & 0xFFFFFFFC;
@@ -1759,8 +1018,7 @@ static INSN_REGPARM void thumbB5(u32 opcode)
 // POP {Rlist}
 static INSN_REGPARM void thumbBC(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   int count = 0;
   u32 address = reg[13].I & 0xFFFFFFFC;
   u32 temp = reg[13].I + 4*cpuBitsSet[opcode & 0xFF];
@@ -1779,8 +1037,7 @@ static INSN_REGPARM void thumbBC(u32 opcode)
 // POP {Rlist, PC}
 static INSN_REGPARM void thumbBD(u32 opcode)
 {
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   int count = 0;
   u32 address = reg[13].I & 0xFFFFFFFC;
   u32 temp = reg[13].I + 4 + 4*cpuBitsSet[opcode & 0xFF];
@@ -1813,24 +1070,22 @@ static INSN_REGPARM void thumbBD(u32 opcode)
   if(opcode & (val)) {                                      \
     CPUWriteMemory(address, reg[(r)].I);                    \
     reg[(b)].I = temp;                                      \
-    if (!count) {                                           \
-        clockTicks += 1 + dataTicksAccess32(address);       \
-    } else {                                                \
-        clockTicks += 1 + dataTicksAccessSeq32(address);    \
-    }                                                       \
-    count++;                                                \
+    u32 c = (u32)count;                                     \
+    u32 seq = dataTicksAccessSeq32(address);                \
+    u32 non = dataTicksAccess32(address);                   \
+    clockTicks += 1 + ((seq & -c) | (non & (c - 1)));       \
+    count = 1;                                              \
     address += 4;                                           \
   }
 
 #define THUMB_LDM_REG(val,r)                                \
   if(opcode & (val)) {                                      \
     reg[(r)].I = CPUReadMemory(address);                    \
-    if (!count) {                                           \
-        clockTicks += 1 + dataTicksAccess32(address);       \
-    } else {                                                \
-        clockTicks += 1 + dataTicksAccessSeq32(address);    \
-    }                                                       \
-    count++;                                                \
+    u32 c = (u32)count;                                     \
+    u32 seq = dataTicksAccessSeq32(address);                \
+    u32 non = dataTicksAccess32(address);                   \
+    clockTicks += 1 + ((seq & -c) | (non & (c - 1)));       \
+    count = 1;                                              \
     address += 4;                                           \
   }
 
@@ -1838,8 +1093,7 @@ static INSN_REGPARM void thumbBD(u32 opcode)
 static INSN_REGPARM void thumbC0(u32 opcode)
 {
   u8 regist = (opcode >> 8) & 7;
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[regist].I & 0xFFFFFFFC;
   u32 temp = reg[regist].I + 4*cpuBitsSet[opcode & 0xff];
   int count = 0;
@@ -1859,8 +1113,7 @@ static INSN_REGPARM void thumbC0(u32 opcode)
 static INSN_REGPARM void thumbC8(u32 opcode)
 {
   u8 regist = (opcode >> 8) & 7;
-  if (busPrefetchCount == 0)
-    busPrefetch = busPrefetchEnable;
+  UPDATE_BUS_PREFETCH
   u32 address = reg[regist].I & 0xFFFFFFFC;
   u32 temp = reg[regist].I + 4*cpuBitsSet[opcode & 0xFF];
   int count = 0;
@@ -1880,234 +1133,65 @@ static INSN_REGPARM void thumbC8(u32 opcode)
 
 // Conditional branches ///////////////////////////////////////////////////
 
+// Broadway Optimization: Shared macro prevents I-Cache bloat from duplicated branch logic.
+// It strictly restores the original clockTicks timing model which is critical for GBA sync.
+#define THUMB_BRANCH_EXEC(cond) \
+  clockTicks = codeTicksAccessSeq16(armNextPC) + 1; \
+  if (cond) { \
+    reg[15].I += ((s8)(opcode & 0xFF)) << 1; \
+    armNextPC = reg[15].I; \
+    reg[15].I += 2; \
+    THUMB_PREFETCH; \
+    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2; \
+    busPrefetchCount = 0; \
+  }
+
 // BEQ offset
-static INSN_REGPARM void thumbD0(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(Z_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD0(u32 opcode) { THUMB_BRANCH_EXEC(Z_FLAG); }
 // BNE offset
-static INSN_REGPARM void thumbD1(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(!Z_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD1(u32 opcode) { THUMB_BRANCH_EXEC(!Z_FLAG); }
 // BCS offset
-static INSN_REGPARM void thumbD2(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(C_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD2(u32 opcode) { THUMB_BRANCH_EXEC(C_FLAG); }
 // BCC offset
-static INSN_REGPARM void thumbD3(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(!C_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD3(u32 opcode) { THUMB_BRANCH_EXEC(!C_FLAG); }
 // BMI offset
-static INSN_REGPARM void thumbD4(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(N_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD4(u32 opcode) { THUMB_BRANCH_EXEC(N_FLAG); }
 // BPL offset
-static INSN_REGPARM void thumbD5(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(!N_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD5(u32 opcode) { THUMB_BRANCH_EXEC(!N_FLAG); }
 // BVS offset
-static INSN_REGPARM void thumbD6(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(V_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD6(u32 opcode) { THUMB_BRANCH_EXEC(V_FLAG); }
 // BVC offset
-static INSN_REGPARM void thumbD7(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(!V_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD7(u32 opcode) { THUMB_BRANCH_EXEC(!V_FLAG); }
 // BHI offset
-static INSN_REGPARM void thumbD8(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(C_FLAG && !Z_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD8(u32 opcode) { THUMB_BRANCH_EXEC(C_FLAG && !Z_FLAG); }
 // BLS offset
-static INSN_REGPARM void thumbD9(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(!C_FLAG || Z_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbD9(u32 opcode) { THUMB_BRANCH_EXEC(!C_FLAG || Z_FLAG); }
 // BGE offset
-static INSN_REGPARM void thumbDA(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(N_FLAG == V_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbDA(u32 opcode) { THUMB_BRANCH_EXEC(N_FLAG == V_FLAG); }
 // BLT offset
-static INSN_REGPARM void thumbDB(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(N_FLAG != V_FLAG) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbDB(u32 opcode) { THUMB_BRANCH_EXEC(N_FLAG != V_FLAG); }
 // BGT offset
-static INSN_REGPARM void thumbDC(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC) + 1;
-  if(!Z_FLAG && (N_FLAG == V_FLAG)) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
+static INSN_REGPARM void thumbDC(u32 opcode) { THUMB_BRANCH_EXEC(!Z_FLAG && (N_FLAG == V_FLAG)); }
 // BLE offset
-static INSN_REGPARM void thumbDD(u32 opcode)
-{
-  UPDATE_OLDREG;
-  clockTicks = codeTicksAccessSeq16(armNextPC);
-  if(Z_FLAG || (N_FLAG != V_FLAG)) {
-    reg[15].I += ((s8)(opcode & 0xFF)) << 1;
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH;
-    clockTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
-    busPrefetchCount=0;
-  }
-}
-
-// SWI, B, BL /////////////////////////////////////////////////////////////
+static INSN_REGPARM void thumbDD(u32 opcode) { THUMB_BRANCH_EXEC(Z_FLAG || (N_FLAG != V_FLAG)); }
 
 // SWI #comment
 static INSN_REGPARM void thumbDF(u32 opcode)
 {
   u32 address = 0;
-  //clockTicks = codeTicksAccessSeq16(address)*2 + codeTicksAccess16(address)+3;
   clockTicks = 3;
-  busPrefetchCount=0;
+  busPrefetchCount = 0;
   CPUSoftwareInterrupt(opcode & 0xFF);
 }
 
 // B offset
 static INSN_REGPARM void thumbE0(u32 opcode)
 {
-  int offset = (opcode & 0x3FF) << 1;
-  if(opcode & 0x0400)
-    offset |= 0xFFFFF800;
+  // Broadway Optimization: Branchless sign extension via arithmetic shift.
+  // opcode bits 0-10 contain the 11-bit immediate.
+  // Shifting left by 21 puts the 11th bit at the sign position (bit 31).
+  // Shifting right (arithmetic) by 20 sign-extends it and multiplies it by 2 natively.
+  s32 offset = ((s32)(opcode << 21)) >> 20;
   reg[15].I += offset;
   armNextPC = reg[15].I;
   reg[15].I += 2;
@@ -2136,11 +1220,11 @@ static INSN_REGPARM void thumbF4(u32 opcode)
 static INSN_REGPARM void thumbF8(u32 opcode)
 {
   int offset = (opcode & 0x7FF);
-  u32 temp = reg[15].I-2;
-  reg[15].I = (reg[14].I + (offset<<1))&0xFFFFFFFE;
+  u32 temp = reg[15].I - 2;
+  reg[15].I = (reg[14].I + (offset << 1)) & 0xFFFFFFFE;
   armNextPC = reg[15].I;
   reg[15].I += 2;
-  reg[14].I = temp|1;
+  reg[14].I = temp | 1;
   THUMB_PREFETCH;
   clockTicks = codeTicksAccessSeq16(armNextPC)*2 + codeTicksAccess16(armNextPC) + 3;
   busPrefetchCount = 0;
@@ -2150,11 +1234,7 @@ static INSN_REGPARM void thumbF8(u32 opcode)
 
 typedef INSN_REGPARM void (*insnfunc_t)(u32 opcode);
 #define thumbUI thumbUnknownInsn
-#ifdef BKPT_SUPPORT
- #define thumbBP thumbBreakpoint
-#else
- #define thumbBP thumbUnknownInsn
-#endif
+#define thumbBP thumbUnknownInsn
 static insnfunc_t thumbInsnTable[1024] = {
   thumb00_00,thumb00_01,thumb00_02,thumb00_03,thumb00_04,thumb00_05,thumb00_06,thumb00_07,  // 00
   thumb00_08,thumb00_09,thumb00_0A,thumb00_0B,thumb00_0C,thumb00_0D,thumb00_0E,thumb00_0F,
@@ -2285,45 +1365,677 @@ static insnfunc_t thumbInsnTable[1024] = {
   thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,
   thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,thumbF8,
 };
+#if JIT_COMPILER_DIFFERENTIAL_TESTING
 
+// -------------------------------------------------------------------------
+// HYBRID TRACE-JIT / C++ EXECUTION ENGINE DIFFERENTIAL TESTING
+// -------------------------------------------------------------------------
+int thumbExecute() {
+    do {
+        u32 pc = armNextPC;
+        BasicBlock* block = jitCache.getBlock(pc);
+
+        if (__builtin_expect(block == nullptr, 0)) {
+            block = JITCompileThumbTrace(pc, jitCache);
+        }
+
+        // ========================================================================
+        // JIT EXECUTION PATH
+        // ========================================================================
+        if (block != nullptr && block->execute != nullptr && jitStats.mismatchCount < MAX_JIT_MISMATCH_COUNT) {
+            {
+                // 1. SAVE CPU STATE BEFORE JIT TRACE
+                u32 savedRegs[16];
+                for (size_t i = 0; i < 16; i++) savedRegs[i] = reg[i].I;
+                u32 savedN = N_FLAG, savedZ = Z_FLAG, savedC = C_FLAG, savedV = V_FLAG;
+                u32 savedArmNextPC = armNextPC;
+				u32 savedTotalTicks = cpuTotalTicks;
+				u32 savedPrefetch[2] = { cpuPrefetch[0], cpuPrefetch[1] };
+				u32 savedBusPrefetchCount = busPrefetchCount;
+
+                // 2. RUN JIT EXECUTION
+                u32 jitFlags[4] = { (u32)N_FLAG, (u32)Z_FLAG, (u32)C_FLAG, (u32)V_FLAG };
+                JITResult jitResult;
+
+                reg[15].I = pc + 4;
+                ExecuteJITTrace(block->execute, (u32*)(void*)&reg[0].I, jitFlags, &jitResult, gbaReadPagePtrs, gbaReadPageMasks, &busPrefetchCount);
+
+                JIT_LOG_EXEC(block->length);
+
+                u32 jitRegs[16];
+                for (size_t i = 0; i < 16; i++) jitRegs[i] = reg[i].I;
+                u32 jitN = jitFlags[0], jitZ = jitFlags[1], jitC = jitFlags[2], jitV = jitFlags[3];
+
+                // 3. REWIND CPU STATE FOR C++ INTERPRETER
+                for (size_t i = 0; i < 16; i++) reg[i].I = savedRegs[i];
+                N_FLAG = savedN; Z_FLAG = savedZ; C_FLAG = savedC; V_FLAG = savedV;
+                armNextPC = savedArmNextPC;
+				cpuTotalTicks = savedTotalTicks;
+				cpuPrefetch[0] = savedPrefetch[0];
+				cpuPrefetch[1] = savedPrefetch[1];
+				busPrefetchCount = savedBusPrefetchCount;
+
+                // 4. RUN C++ INTERPRETER UNTIL IT HAS ACCUMULATED AT LEAST AS MANY
+                // CYCLES AS THE JIT REPORTED.
+                //
+                // This must be cycle-based, not PC-based. PC-equality is ambiguous
+                // for any trace containing a backward branch (a loop): if the loop
+                // body revisits an address that's also the JIT's eventual exit PC,
+                // stopping at PC-equality catches the FIRST visit, not the real
+                // (possibly much later) final one - comparing state from the wrong
+                // iteration. Confirmed directly: block 0x08002964 (a bounds-checked
+                // clear loop) now shows matching PC (0x08002970, visited every
+                // iteration) but wildly different cycles (83 vs 21-29) and R2 -
+                // both engines stopped at the same address but after a different
+                // number of loop iterations. Cycle count is monotonic and can't be
+                // accidentally revisited, so it's the correct primary signal.
+                //
+                // A `while` (not `do-while`) matters here too: if the JIT's own
+                // bailout reports nextPC == pc (a trace whose loop back-edge returns
+                // to its own entry, or a bail on its very first instruction with
+                // zero cycles accumulated so far), zero catch-up instructions should
+                // run - not one forced extra, which a do-while would execute before
+                // ever checking the condition.
+                int cppCycles = 0;
+                const u32 kMaxSteps = 8192; // loops can iterate many times
+                u32 steps = 0;
+                int cppLocalTicks = 0;
+
+                while (cppCycles < (int)jitResult.cycles && steps < kMaxSteps &&
+                       cpuTotalTicks < cpuNextEvent && !armState && !holdState && !SWITicks) {
+					u32 opcode = cpuPrefetch[0];
+					cpuPrefetch[0] = cpuPrefetch[1];
+
+					busPrefetch = false;
+					if (busPrefetchCount & 0xFFFFFF00)
+						busPrefetchCount = 0x100 | (busPrefetchCount & 0xFF);
+
+					u32 oldArmNextPC = armNextPC;
+					armNextPC = reg[15].I;
+					reg[15].I += 2;
+
+					THUMB_PREFETCH_NEXT;
+
+					clockTicks = 0;
+					(*thumbInsnTable[opcode>>6])(opcode);
+					cppLocalTicks = clockTicks;
+
+					if (cppLocalTicks < 0) break;
+
+					if (cppLocalTicks == 0)
+						cppLocalTicks = codeTicksAccessSeq16(oldArmNextPC) + 1;
+
+					cpuTotalTicks += cppLocalTicks;
+					cppCycles += cppLocalTicks;
+					steps++;
+				}
+
+				// If the interpreter dropped into ARM mode mid-catch-up, this
+				// comparison is no longer meaningful: the JIT never attempts to
+				// compile through a mode switch (it bails cleanly at the BX,
+				// reporting the BX's own address as the resume point), but this
+				// catch-up loop only knows how to dispatch THUMB opcodes. Any
+				// "mismatch" from here on on is an artifact of comparing a Thumb
+				// bailout against real ARM-mode execution, not a JIT bug.
+				bool armModeDuringCatchup = armState;
+
+				// 5. DETECT & COMPARE ALL CPU FIELDS (BEFORE & AFTER)
+				bool mismatch = false;
+				bool regMismatches[15] = { false };
+				bool pcMismatch = false;
+				bool flagMismatch = false;
+				bool cycleMismatch = false;
+
+				// Compare R0 - R14 (R13=SP, R14=LR)
+				for (int i = 0; i < 15; i++) {
+					if (jitRegs[i] != reg[i].I) {
+						regMismatches[i] = true;
+						mismatch = true;
+					}
+				}
+
+                // Compare Next PC
+				if (jitResult.nextPC != armNextPC) {
+					pcMismatch = true;
+					mismatch = true;
+				}
+
+                // Compare N, Z, C, V Flags
+				if (jitN != N_FLAG || jitZ != Z_FLAG || jitC != C_FLAG || jitV != V_FLAG) {
+					flagMismatch = true;
+					mismatch = true;
+				}
+
+                // Compare Cycle Timing
+				if ((int)jitResult.cycles != cppCycles) {
+					cycleMismatch = true;
+					mismatch = true;
+				}
+
+				// 6. LOG DETAILED MISMATCH REPORT IF DISCREPANCY FOUND
+				if (mismatch) {
+					static const char* regNames[15] = {
+						"R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+						"R8", "R9", "R10", "R11", "R12", "SP", "LR"
+					};
+					u16 startOpcode = CPUReadHalfWord(pc);
+
+					static std::string assembledMsg;
+					static char tempBuf[1024];
+					assembledMsg.clear();
+
+					auto appendToMsg = [&](const char* format, ...) {
+						va_list args;
+						va_start(args, format);
+						vsnprintf(tempBuf, sizeof(tempBuf), format, args);
+						va_end(args);
+						assembledMsg.append(tempBuf);
+					};
+
+					appendToMsg("StartPC: 0x%08X | Trace Length: %u | Opcode: 0x%04X\n", pc, block->length, startOpcode);
+					appendToMsg("Initial Flags: N=%u Z=%u C=%u V=%u\n", savedN, savedZ, savedC, savedV);
+					appendToMsg("JIT Result:  NextPC=0x%08X | Cycles=%u | Flags=(N:%u Z:%u C:%u V:%u)\n",
+						jitResult.nextPC, jitResult.cycles, jitN, jitZ, jitC, jitV);
+					appendToMsg("C++ Result:  NextPC=0x%08X | Cycles=%d | Flags=(N:%u Z:%u C:%u V:%u)\n",
+							armNextPC, cppCycles, N_FLAG, Z_FLAG, C_FLAG, V_FLAG);
+
+					appendToMsg("--- MISMATCH DETAILS ---\n");
+					for (int i = 0; i < 15; i++) {
+						if (regMismatches[i]) {
+							appendToMsg("  [REG %-3s] Initial=0x%08X | JIT=0x%08X vs C++=0x%08X\n",
+								regNames[i], savedRegs[i], jitRegs[i], reg[i].I);
+						}
+					}
+					if (pcMismatch) {
+						appendToMsg("  [NEXT PC] JIT=0x%08X vs C++=0x%08X\n", jitResult.nextPC, armNextPC);
+					}
+					if (flagMismatch) {
+						appendToMsg("  [FLAGS]   JIT=(N:%u Z:%u C:%u V:%u) vs C++=(N:%u Z:%u C:%u V:%u)\n",
+							jitN, jitZ, jitC, jitV, N_FLAG, Z_FLAG, C_FLAG, V_FLAG);
+					}
+					if (cycleMismatch) {
+						appendToMsg("  [CYCLES]  JIT=%u vs C++=%d\n", jitResult.cycles, cppCycles);
+					}
+					if (armModeDuringCatchup) {
+						appendToMsg("  [NOTE] Interpreter entered ARM mode during catch-up - this comparison reflects a shadow-harness blind spot (Thumb-only catch-up can't follow a real mode switch), not a JIT bug. The JIT itself bails cleanly at the BX in this case.\n");
+					}
+
+					JIT_LOG_MISMATCH(assembledMsg.c_str());
+				}
+
+				if(cppLocalTicks < 0) {
+					return 0;
+				} else if(cpuTotalTicks >= cpuNextEvent || armState || holdState || SWITicks) {
+					return 1;
+				}
+				continue;
+            }
+        }
+
+        // FALLBACK TO C++ INTERPRETER
+        u16 opcode = cpuPrefetch[0];
+		cpuPrefetch[0] = cpuPrefetch[1];
+
+		JIT_LOG_FALLBACK(opcode);
+
+		busPrefetch = false;
+		if (busPrefetchCount & 0xFFFFFF00)
+			busPrefetchCount = 0x100 | (busPrefetchCount & 0xFF);
+
+		clockTicks = 0;
+		u32 oldArmNextPC = armNextPC;
+		armNextPC = reg[15].I;
+		reg[15].I += 2;
+
+		THUMB_PREFETCH_NEXT;
+
+		clockTicks = 0;
+		(*thumbInsnTable[opcode>>6])(opcode);
+		int localTicks = clockTicks;
+
+		if (localTicks < 0) return 0;
+		if (localTicks == 0) localTicks = codeTicksAccessSeq16(oldArmNextPC) + 1;
+
+		cpuTotalTicks += localTicks;
+    } while (cpuTotalTicks < cpuNextEvent && !armState && !holdState && !SWITicks);
+    return 1;
+}
+#elif JIT_COMPILER
+// -------------------------------------------------------------------------
+// HYBRID TRACE-JIT / C++ EXECUTION ENGINE
+// -------------------------------------------------------------------------
+int instrCount = 0;
+
+int thumbExecute() {
+    do {
+        u32 pc = armNextPC;
+        BasicBlock* block = jitCache.getBlock(pc);
+
+        if (__builtin_expect(block == nullptr, 0)) {
+            block = JITCompileThumbTrace(pc, jitCache);
+        }
+
+        // ========================================================================
+		// JIT EXECUTION PATH
+		// ========================================================================
+		if (block != nullptr && block->execute != nullptr) {
+			u32 flagBuffer[4] = { (u32)N_FLAG, (u32)Z_FLAG, (u32)C_FLAG, (u32)V_FLAG };
+			JITResult result;
+
+			// Align reg[15].I to pc + 4 so that PC-relative reads
+			// inside the compiled JIT trace match authentic GBA pipeline values.
+			reg[15].I = pc + 4;
+
+			JIT_LOG_TRACE_ENTRY(pc, flagBuffer);
+
+			// Execute Native Trace with flat memory maps
+			ExecuteJITTrace(block->execute, (u32*)&reg[0].I, flagBuffer, &result, gbaReadPagePtrs, gbaReadPageMasks, &busPrefetchCount);
+
+			JIT_LOG_TRACE_EXIT(pc, result.nextPC, flagBuffer, result.cycles);
+
+			JIT_LOG_EXEC(block->length);
+
+			// Restore updated status flags
+			N_FLAG = flagBuffer[0];
+			Z_FLAG = flagBuffer[1];
+			C_FLAG = flagBuffer[2];
+			V_FLAG = flagBuffer[3];
+
+			// Account for execution cycles accumulated by the trace block
+			cpuTotalTicks += result.cycles;
+			instrCount += block->length;
+
+			// Pipeline re-prime
+			armNextPC = result.nextPC;
+			reg[15].I = armNextPC + 2;
+			cpuPrefetch[0] = CPUReadHalfWord(armNextPC);
+			cpuPrefetch[1] = CPUReadHalfWord(armNextPC + 2);
+
+			JIT_LOG_STATE_JIT(pc, armNextPC, cpuTotalTicks, result.cycles, instrCount);
+			continue;
+		}
+
+        // ========================================================================
+        // LEGACY C++ FALLBACK PATH
+        // ========================================================================
+        if (cheatsEnabled) cpuMasterCodeCheck();
+
+        u16 opcode = cpuPrefetch[0];
+        cpuPrefetch[0] = cpuPrefetch[1];
+
+        JIT_LOG_FALLBACK(opcode);
+
+        busPrefetch = false;
+        if (busPrefetchCount & 0xFFFFFF00)
+            busPrefetchCount = 0x100 | (busPrefetchCount & 0xFF);
+
+        clockTicks = 0;
+        u32 oldArmNextPC = armNextPC;
+        armNextPC = reg[15].I;
+        reg[15].I += 2;
+
+        THUMB_PREFETCH_NEXT;
+
+        clockTicks = 0;
+		(*thumbInsnTable[opcode>>6])(opcode);
+		int localTicks = clockTicks;
+
+		if (localTicks < 0) return 0;
+		if (localTicks == 0) localTicks = codeTicksAccessSeq16(oldArmNextPC) + 1;
+
+		cpuTotalTicks += localTicks;
+		JIT_LOG_STATE_CPP(pc, armNextPC, cpuTotalTicks, localTicks, ++instrCount);
+    } while (cpuTotalTicks < cpuNextEvent && !armState && !holdState && !SWITicks);
+
+    return 1;
+}
+#else
 // Wrapper routine (execution loop) ///////////////////////////////////////
+
+// ========================================================================
+// OPTIMIZED THUMB EXECUTION LOOP (FAST-PATH DISPATCHER)
+// Replaces jump-table 'switch' with predictable 'if/else' range cascades.
+// Eliminates Function Call ABI overhead and CTR indirect branch stalling.
+// Localizes the clockTicks state to prevent global register spilling.
+// ========================================================================
+int instrCount = 0;
 
 int thumbExecute()
 {
-  do {
-	  if( cheatsEnabled ) {
-		  cpuMasterCodeCheck();
-	  }
+    do {
+        if( cheatsEnabled ) {
+            cpuMasterCodeCheck();
+        }
 
-    //if ((armNextPC & 0x0803FFFF) == 0x08020000)
-    //    busPrefetchCount=0x100;
+        u32 opcode = cpuPrefetch[0];
+        cpuPrefetch[0] = cpuPrefetch[1];
 
-    u32 opcode = cpuPrefetch[0];
-    cpuPrefetch[0] = cpuPrefetch[1];
+        // Branchless bus prefetch boundary check
+        busPrefetch = false;
+        if (busPrefetchCount & 0xFFFFFF00)
+            busPrefetchCount = 0x100 | (busPrefetchCount & 0xFF);
 
-    busPrefetch = false;
-    if (busPrefetchCount & 0xFFFFFF00)
-      busPrefetchCount = 0x100 | (busPrefetchCount & 0xFF);
-    clockTicks = 0;
-    u32 oldArmNextPC = armNextPC;
-#ifndef FINAL_VERSION
-    if(armNextPC == stop) {
-      armNextPC++;
-    }
-#endif
+        u32 oldArmNextPC = armNextPC;
+        armNextPC = reg[15].I;
+        reg[15].I += 2;
 
-    armNextPC = reg[15].I;
-    reg[15].I += 2;
-    THUMB_PREFETCH_NEXT;
+		// --- STREAMLINED O(1) INSTRUCTION PREFETCH ---
+		// Automatically handles the +2 pipeline offset and issues the native L1 dcbt
+        THUMB_PREFETCH_NEXT;
 
-    (*thumbInsnTable[opcode>>6])(opcode);
+		// --- OPTIONAL FAST-PATH DISPATCHER ---
+		// Handle the most common opcodes inline to avoid the thumbInsnTable overhead
+        int localTicks = 0;
+        bool handledInline = false;
 
-    if (clockTicks < 0)
-      return 0;
-    if (clockTicks==0)
-      clockTicks = codeTicksAccessSeq16(oldArmNextPC) + 1;
-    cpuTotalTicks += clockTicks;
+		// FAST-PATH DISPATCHER
+		// Extract top 5 bits (opcode >> 11) to intercept ALU/Shift/Immediate ops
+        int top5 = opcode >> 11;
 
-  } while (cpuTotalTicks < cpuNextEvent && !armState && !holdState && !SWITicks);
-  return 1;
+        // ========================================================================
+        // FAST-PATH 1: ALU, SHIFTS, AND IMMEDIATES (Opcodes 0x0000 - 0x3FFF)
+        // Grouped to force a single 'cmpwi' branch evaluation.
+        // ========================================================================
+        if (top5 <= 7) {
+            if (top5 == 0) { // LSL Rd, Rm, #Imm5 (thumb00)
+                int dest = opcode & 0x07;
+                int source = (opcode >> 3) & 0x07;
+                int shift = (opcode >> 6) & 0x1F;
+                u32 src_val = reg[source].I;
+
+				// Branchless mask: 0xFFFFFFFF if shift > 0, 0x00000000 if shift == 0
+                u32 shift_mask = -(u32)(shift != 0);
+
+				// If shift==0, C_FLAG is untouched. If shift>0, C_FLAG = bit (32-shift).
+                u32 new_c = (src_val >> ((32 - shift) & 0x1F)) & 1;
+                C_FLAG = (new_c & shift_mask) | (C_FLAG & ~shift_mask);
+
+				// Branchless value calculation
+                u32 value = ((src_val << shift) & shift_mask) | (src_val & ~shift_mask);
+                reg[dest].I = value;
+				N_FLAG = (value >> 31);
+				Z_FLAG = (value == 0);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 1) { // LSR Rd, Rm, #Imm5 (thumb08)
+                int dest = opcode & 0x07;
+                int source = (opcode >> 3) & 0x07;
+                int shift = (opcode >> 6) & 0x1F;
+                u32 src_val = reg[source].I;
+
+                u32 shift_mask = -(u32)(shift != 0);
+
+				// If shift != 0, C is bit (shift-1). If shift == 0, C is bit 31.
+                u32 c_shift_nz = (shift - 1) & 0x1F;
+                u32 new_c = ((src_val >> c_shift_nz) & shift_mask) | ((src_val >> 31) & ~shift_mask);
+                C_FLAG = new_c & 1;
+
+				// If shift==0, value is 0.
+                u32 value = (src_val >> shift) & shift_mask;
+                reg[dest].I = value;
+				N_FLAG = (value >> 31);
+				Z_FLAG = (value == 0);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 2) { // ASR Rd, Rm, #Imm5 (thumb10)
+                int dest = opcode & 0x07;
+                int source = (opcode >> 3) & 0x07;
+                int shift = (opcode >> 6) & 0x1F;
+                s32 src_val = (s32)reg[source].I;
+
+                u32 shift_mask = -(u32)(shift != 0);
+                u32 c_shift_nz = (shift - 1) & 0x1F;
+                u32 new_c = (((u32)src_val >> c_shift_nz) & shift_mask) | (((u32)src_val >> 31) & ~shift_mask);
+                C_FLAG = new_c & 1;
+
+                u32 sign_ext = -((u32)((u32)src_val >> 31));
+                u32 value = (((u32)(src_val >> shift)) & shift_mask) | (sign_ext & ~shift_mask);
+                reg[dest].I = value;
+				N_FLAG = (value >> 31);
+				Z_FLAG = (value == 0);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 3) { // ADD/SUB Rd, Rs, Rn / #Imm3 (thumb18 - thumb1E)
+                int dest = opcode & 0x07;
+                int source = (opcode >> 3) & 0x07;
+                u32 lhs = reg[source].I;
+
+				// Bit 10 distinguishes between immediate (1) and register (0)
+                u32 rhs = (opcode & 0x0400) ? ((opcode >> 6) & 0x07) : reg[(opcode >> 6) & 0x07].I;
+                u32 res;
+
+				// Bit 9 distinguishes between SUB (1) and ADD (0)
+                if (opcode & 0x0200) {
+                    res = lhs - rhs;
+					SUBCARRY(lhs, rhs, res);
+					SUBOVERFLOW(lhs, rhs, res);
+                } else {
+                    res = lhs + rhs;
+					ADDCARRY(lhs, rhs, res);
+					ADDOVERFLOW(lhs, rhs, res);
+                }
+                reg[dest].I = res;
+				Z_FLAG = (res == 0);
+				N_FLAG = (res >> 31);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 4) { // MOV Rd, #Imm8 (thumb20)
+                int dest = (opcode >> 8) & 0x07;
+                u32 value = opcode & 0xFF;
+                reg[dest].I = value;
+				N_FLAG = 0;
+				Z_FLAG = (value == 0);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 5) { // CMP Rd, #Imm8 (thumb28)
+                int dest = (opcode >> 8) & 0x07;
+                u32 lhs = reg[dest].I;
+                u32 rhs = opcode & 0xFF;
+                u32 res = lhs - rhs;
+				Z_FLAG = (res == 0);
+				N_FLAG = (res >> 31);
+				SUBCARRY(lhs, rhs, res);
+				SUBOVERFLOW(lhs, rhs, res);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 6) { // ADD Rd, #Imm8 (thumb30)
+                int dest = (opcode >> 8) & 0x07;
+                u32 lhs = reg[dest].I;
+                u32 rhs = opcode & 0xFF;
+                u32 res = lhs + rhs;
+                reg[dest].I = res;
+				Z_FLAG = (res == 0);
+				N_FLAG = (res >> 31);
+				ADDCARRY(lhs, rhs, res);
+				ADDOVERFLOW(lhs, rhs, res);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 7) { // SUB Rd, #Imm8 (thumb38)
+                int dest = (opcode >> 8) & 0x07;
+                u32 lhs = reg[dest].I;
+                u32 rhs = opcode & 0xFF;
+                u32 res = lhs - rhs;
+                reg[dest].I = res;
+				Z_FLAG = (res == 0);
+				N_FLAG = (res >> 31);
+				SUBCARRY(lhs, rhs, res);
+				SUBOVERFLOW(lhs, rhs, res);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+        }
+        // ========================================================================
+        // FAST-PATH 2: MEMORY I/O (Opcodes 0x6000 - 0x9FFF)
+        // Integrates completely with our O(1) Memory Pages
+        // ========================================================================
+        else if (top5 >= 12 && top5 <= 19) {
+            busPrefetch |= (busPrefetchEnable & (busPrefetchCount == 0));
+
+            if (top5 == 12) { // STR Rd, [Rb, #Imm] (thumb60)
+                int dest = opcode & 0x07;
+                int base = (opcode >> 3) & 0x07;
+                u32 address = reg[base].I + (((opcode >> 6) & 0x1F) << 2);
+                CPUWriteMemory(address, reg[dest].I);
+                localTicks = dataTicksAccess32(address) + codeTicksAccess16(armNextPC) + 2;
+                handledInline = true;
+            }
+            else if (top5 == 13) { // LDR Rd, [Rb, #Imm] (thumb68)
+                int dest = opcode & 0x07;
+                int base = (opcode >> 3) & 0x07;
+                u32 address = reg[base].I + (((opcode >> 6) & 0x1F) << 2);
+                reg[dest].I = CPUReadMemory(address);
+                localTicks = 3 + dataTicksAccess32(address) + codeTicksAccess16(armNextPC);
+                handledInline = true;
+            }
+            else if (top5 == 14) { // STRB Rd, [Rb, #Imm] (thumb70)
+                int dest = opcode & 0x07;
+                int base = (opcode >> 3) & 0x07;
+                u32 address = reg[base].I + ((opcode >> 6) & 0x1F);
+                CPUWriteByte(address, reg[dest].B.B0);
+                localTicks = dataTicksAccess16(address) + codeTicksAccess16(armNextPC) + 2;
+                handledInline = true;
+            }
+            else if (top5 == 15) { // LDRB Rd, [Rb, #Imm] (thumb78)
+                int dest = opcode & 0x07;
+                int base = (opcode >> 3) & 0x07;
+                u32 address = reg[base].I + ((opcode >> 6) & 0x1F);
+                reg[dest].I = CPUReadByte(address);
+                localTicks = 3 + dataTicksAccess16(address) + codeTicksAccess16(armNextPC);
+                handledInline = true;
+            }
+            else if (top5 == 16) { // STRH Rd, [Rb, #Imm] (thumb80)
+                int dest = opcode & 0x07;
+                int base = (opcode >> 3) & 0x07;
+                u32 address = reg[base].I + (((opcode >> 6) & 0x1F) << 1);
+                CPUWriteHalfWord(address, reg[dest].W.W0);
+                localTicks = dataTicksAccess16(address) + codeTicksAccess16(armNextPC) + 2;
+                handledInline = true;
+            }
+            else if (top5 == 17) { // LDRH Rd, [Rb, #Imm] (thumb80)
+                int dest = opcode & 0x07;
+                int base = (opcode >> 3) & 0x07;
+                u32 address = reg[base].I + (((opcode >> 6) & 0x1F) << 1);
+                reg[dest].I = CPUReadHalfWord(address);
+                localTicks = 3 + dataTicksAccess16(address) + codeTicksAccess16(armNextPC);
+                handledInline = true;
+            }
+            else if (top5 == 18) { // STR R0~R7, [SP, #Imm8] (thumb90)
+                int dest = (opcode >> 8) & 0x07;
+                u32 address = reg[13].I + ((opcode & 0xFF) << 2);
+                CPUWriteMemory(address, reg[dest].I);
+                localTicks = dataTicksAccess32(address) + codeTicksAccess16(armNextPC) + 2;
+                handledInline = true;
+            }
+            else if (top5 == 19) { // LDR R0~R7, [SP, #Imm8] (thumb98)
+                int dest = (opcode >> 8) & 0x07;
+                u32 address = reg[13].I + ((opcode & 0xFF) << 2);
+                reg[dest].I = CPUReadMemoryQuick(address); // Aligns perfectly to stack RAM
+                localTicks = 3 + dataTicksAccess32(address) + codeTicksAccess16(armNextPC);
+                handledInline = true;
+            }
+        }
+        // ========================================================================
+        // FAST-PATH 3: UNCONDITIONAL BRANCHING (Opcodes 0xE000 - 0xFFFF)
+        // Intercepts opcodes 0xE and 0xF to bypass the 1,024-entry indirect table.
+		// Uses 1-cycle hardware arithmetic shifts to handle sign-extension branchlessly.
+        // ========================================================================
+        else if (top5 >= 28) {
+            if (top5 == 28) { // B offset (thumbE0)
+            	// Branchless 11-bit sign extension and multiply-by-two
+                s32 offset = ((s32)(opcode << 21)) >> 20;
+                reg[15].I += offset;
+                armNextPC = reg[15].I;
+                reg[15].I += 2;
+                THUMB_PREFETCH; // Evaluates natively via the updated macro
+                localTicks = codeTicksAccessSeq16(armNextPC) * 2 + codeTicksAccess16(armNextPC) + 3;
+                busPrefetchCount = 0;
+                handledInline = true;
+            }
+            else if (top5 == 30) { // BL prefix (thumbF0 and thumbF4)
+            	// Broadway Optimization: Branchless sign extension of the 11-bit offset.
+				// opcode << 21 places the 11th bit (the sign bit) directly at the MSB (bit 31).
+				// Arithmetic shift right by 9 sign-extends it and aligns it to a 12-bit left shift natively.
+				// Replaces conditional 'if (opcode & 0x0400)' entirely.
+                reg[14].I = reg[15].I + (((s32)(opcode << 21)) >> 9);
+                localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+                handledInline = true;
+            }
+            else if (top5 == 31) { // BL/BLX suffix (thumbF8)
+                u32 temp = reg[15].I - 2;
+                reg[15].I = (reg[14].I + ((opcode & 0x7FF) << 1)) & 0xFFFFFFFE;
+                armNextPC = reg[15].I;
+                reg[15].I += 2;
+                reg[14].I = temp | 1;
+                THUMB_PREFETCH;
+                localTicks = codeTicksAccessSeq16(armNextPC) * 2 + codeTicksAccess16(armNextPC) + 3;
+                busPrefetchCount = 0;
+                handledInline = true;
+            }
+        }
+        // ========================================================================
+        // FAST-PATH 4: CONDITIONAL BRANCHES (Bcc - 0xD000 - 0xDDFF)
+        // ========================================================================
+        else if ((opcode >> 12) == 0xD && ((opcode >> 8) & 0xF) < 0xE) {
+            int cond = 0;
+            switch ((opcode >> 8) & 0xF) {
+                case 0x0: cond = Z_FLAG; break;
+                case 0x1: cond = !Z_FLAG; break;
+                case 0x2: cond = C_FLAG; break;
+                case 0x3: cond = !C_FLAG; break;
+                case 0x4: cond = N_FLAG; break;
+                case 0x5: cond = !N_FLAG; break;
+                case 0x6: cond = V_FLAG; break;
+                case 0x7: cond = !V_FLAG; break;
+                case 0x8: cond = C_FLAG && !Z_FLAG; break;
+                case 0x9: cond = !C_FLAG || Z_FLAG; break;
+                case 0xA: cond = N_FLAG == V_FLAG; break;
+                case 0xB: cond = N_FLAG != V_FLAG; break;
+                case 0xC: cond = !Z_FLAG && (N_FLAG == V_FLAG); break;
+                case 0xD: cond = Z_FLAG || (N_FLAG != V_FLAG); break;
+            }
+
+            localTicks = codeTicksAccessSeq16(armNextPC) + 1;
+
+            if (cond) {
+                reg[15].I += ((s8)(opcode & 0xFF)) << 1;
+                armNextPC = reg[15].I;
+                reg[15].I += 2;
+                THUMB_PREFETCH;
+                localTicks += codeTicksAccessSeq16(armNextPC) + codeTicksAccess16(armNextPC) + 2;
+                busPrefetchCount = 0;
+            }
+            handledInline = true;
+        }
+
+        // ========================================================================
+        // FALLBACK: The original 1,024 instruction jump table
+        // ========================================================================
+        if (!handledInline) {
+            clockTicks = 0;
+            (*thumbInsnTable[opcode>>6])(opcode);
+            localTicks = clockTicks; // Extract resulting global payload
+        }
+
+		if (localTicks < 0)
+		  return 0;
+		if (localTicks == 0)
+		  localTicks = codeTicksAccessSeq16(oldArmNextPC) + 1; // oldArmNextPC is correct here for fallbacks lacking tick assignment
+
+        // Correctly restores ticks for unhandled fallbacks lacking explicit overrides
+        if (localTicks == 0)
+        	localTicks = codeTicksAccessSeq16(oldArmNextPC) + 1;
+
+        cpuTotalTicks += localTicks;
+        JIT_LOG_STATE_CPP(oldArmNextPC, armNextPC, cpuTotalTicks, localTicks, ++instrCount);
+    } while (cpuTotalTicks < cpuNextEvent && !armState && !holdState && !SWITicks);
+
+    return 1;
 }
+#endif

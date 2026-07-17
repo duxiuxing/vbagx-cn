@@ -14,29 +14,10 @@ struct EmulatedSystem {
   void (*emuReset)();
   // clean up memory
   void (*emuCleanUp)();
-  // load battery file
-  bool (*emuReadBattery)(const char *);
-  // write battery file
-  bool (*emuWriteBattery)(const char *);
-#ifdef __LIBRETRO__
-   // load state
-   bool (*emuReadState)(const u8*, unsigned);
-   // load state
-   unsigned (*emuWriteState)(u8*, unsigned);
-#else
-   // load state
-   bool (*emuReadState)(const char *);
-   // save state
-   bool (*emuWriteState)(const char *);
-#endif
   // load memory state (rewind)
   bool (*emuReadMemState)(char *, int);
   // write memory state (rewind)
   bool (*emuWriteMemState)(char *, int);
-  // write PNG file
-  bool (*emuWritePNG)(const char *);
-  // write BMP file
-  bool (*emuWriteBMP)(const char *);
   // emulator update CPSR (ARM only)
   void (*emuUpdateCPSR)();
   // emulator has debugger
@@ -80,22 +61,15 @@ extern void Sm60FPS_Init();
 extern bool Sm60FPS_CanSkipFrame();
 extern void Sm60FPS_Sleep();
 extern void DbgMsg(const char *msg, ...);
-#ifdef SDL
 #define winlog log
-#else
-extern void winlog(const char *,...);
-#endif
 extern void (*dbgOutput)(const char *s, u32 addr);
 extern void (*dbgSignal)(int sig,int number);
 
 extern u16 systemColorMap16[0x10000];
-//extern u32 systemColorMap32[0x10000];
-extern u32 *systemColorMap32;
 extern u16 systemGbPalette[24];
 extern int systemRedShift;
 extern int systemGreenShift;
 extern int systemBlueShift;
-extern int systemColorDepth;
 extern int systemDebug;
 extern int systemVerbose;
 extern int systemFrameSkip;

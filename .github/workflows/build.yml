@@ -32,7 +32,7 @@ jobs:
         # cp fonts/en.ttf dist/VbaGX/apps/vbagx/
         cp fonts/jp.ttf dist/VbaGX/apps/vbagx/
         cp fonts/ko.ttf dist/VbaGX/apps/vbagx/
-        cp fonts/zh_cn.ttf dist/VbaGX/apps/vbagx/
+        cp fonts/zh_cn.ttf dist/VbaGX/apps/vbagx/zh.ttf
         # cp fonts/zh_hk.ttf dist/VbaGX/apps/vbagx/
         cp hbc/icon.png dist/VbaGX/apps/vbagx/
         cp hbc/meta.xml dist/VbaGX/apps/vbagx/
@@ -41,10 +41,6 @@ jobs:
         touch dist/VbaGX/vbagx/artwork/artworkdir
         mkdir dist/VbaGX/vbagx/cheats        
         touch dist/VbaGX/vbagx/cheats/cheatsdir
-        mkdir -p dist/VbaGX/vbagx/borders
-        cp hbc/defaultgba-1.png dist/VbaGX/vbagx/borders/
-        cp hbc/defaultgba-2.png dist/VbaGX/vbagx/borders/
-        cp hbc/defaultgba-3.png dist/VbaGX/vbagx/borders/
         mkdir -p dist/VbaGX/vbagx/covers
         touch dist/VbaGX/vbagx/covers/coversdir
         mkdir dist/VbaGX/vbagx/roms        
@@ -108,7 +104,7 @@ jobs:
         rm -r vbagx/roms/*
         rm -r vbagx/saves/*
         rm -r vbagx/screenshots/*
-        zip -r ../VbaGX-v2.5.1.world.zip *
+        zip -r ../VbaGX-v3.0.0.world.zip *
         # cd ../VbaGX-GameCube
         # zip -r ../VbaGX-GameCube.zip *
 
