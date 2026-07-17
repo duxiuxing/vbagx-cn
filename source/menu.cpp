@@ -866,7 +866,7 @@ static void WindowCredits(void * ptr)
 	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("Zopenko, Glitch, libertyernie");
 	txt[i]->SetPosition(x2,y); i++; y+=24;
-	txt[i] = new GuiText("cebolleto, bgK, Carl Kenner");
+	txt[i] = new GuiText("cebolleto, bgK, Carl Kenner,");
 	txt[i]->SetPosition(x2, y); i++; y += 24;
 	txt[i] = new GuiText("dancinninjac");
 	txt[i]->SetPosition(x2,y); i++; y+=36;
