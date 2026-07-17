@@ -834,6 +834,8 @@ static void WindowCredits(void * ptr)
 	bool exit = false;
 	int i = 0;
 	int y = 20;
+	const int x1 = 40;
+	const int x2 = 250;
 
 	GuiWindow creditsWindow(screenwidth,screenheight);
 	GuiWindow creditsWindowBox(580,448);
@@ -844,7 +846,7 @@ static void WindowCredits(void * ptr)
 	creditsBoxImg.SetAlignment(ALIGN_CENTRE, ALIGN_MIDDLE);
 	creditsWindowBox.Append(&creditsBoxImg);
 
-	int numEntries = 24;
+	int numEntries = 25;
 	GuiText * txt[numEntries];
 
 	txt[i] = new GuiText("Credits", 20, (GXColor){0, 0, 0, 255});
@@ -856,49 +858,53 @@ static void WindowCredits(void * ptr)
 	GuiText::SetPresets(20, (GXColor){0, 0, 0, 255}, 0, FTGX_JUSTIFY_LEFT | FTGX_ALIGN_TOP, ALIGN_LEFT, ALIGN_TOP);
 
 	txt[i] = new GuiText("Main developer");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("Tantric");
-	txt[i]->SetPosition(250,y); i++; y+=48;
+	txt[i]->SetPosition(x2,y); i++; y+=36;
 
 	txt[i] = new GuiText("Additional coding");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("Zopenko, Glitch, libertyernie");
-	txt[i]->SetPosition(250,y); i++; y+=24;
-	txt[i] = new GuiText("cebolleto, bgK, Carl Kenner, dancinninjac");
-	txt[i]->SetPosition(250,y); i++; y+=48;
+	txt[i]->SetPosition(x2,y); i++; y+=24;
+	txt[i] = new GuiText("cebolleto, bgK, Carl Kenner");
+	txt[i]->SetPosition(x2, y); i++; y += 24;
+	txt[i] = new GuiText("dancinninjac");
+	txt[i]->SetPosition(x2,y); i++; y+=36;
 
 	txt[i] = new GuiText("Menu artwork");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("the3seashells");
-	txt[i]->SetPosition(250,y); i++; y+=24;
+	txt[i]->SetPosition(x2,y); i++; y+=24;
 	txt[i] = new GuiText("Menu sound");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("Peter de Man");
-	txt[i]->SetPosition(250,y); i++; y+=32;
+	txt[i]->SetPosition(x2,y); i++; y+=32;
 
 	txt[i] = new GuiText("VBA GameCube");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("SoftDev, emukidid");
-	txt[i]->SetPosition(250,y); i++; y+=24;
+	txt[i]->SetPosition(x2,y); i++; y+=24;
 	txt[i] = new GuiText("Visual Boy Advance - M");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("VBA-M Team");
-	txt[i]->SetPosition(250,y); i++; y+=24;
+	txt[i]->SetPosition(x2,y); i++; y+=24;
 	txt[i] = new GuiText("Visual Boy Advance");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("Forgotten");
-	txt[i]->SetPosition(250,y); i++; y+=24;
+	txt[i]->SetPosition(x2,y); i++; y+=24;
 
 	txt[i] = new GuiText("libogc / devkitPPC");
-	txt[i]->SetPosition(40,y); i++;
+	txt[i]->SetPosition(x1,y); i++;
 	txt[i] = new GuiText("shagkur & WinterMute");
-	txt[i]->SetPosition(250,y); i++; y+=24;
+	txt[i]->SetPosition(x2,y); i++; y+=24;
 
 	char controllerInfo[100];
 	char consoleDetails[40];
 	char memoryFreeInfo[50];
 
+#ifdef HW_RVL
 	sprintf(controllerInfo, GetUSBControllerInfo());
+#endif
 	sprintf(consoleDetails, getConsoleDetails());
 	sprintf(memoryFreeInfo, getMemoryFreeInfo());
 

@@ -97,9 +97,6 @@ msgstr "Caps"
 msgid "Catalan"
 msgstr "加泰罗尼亚语"
 
-msgid "cebolleto, bgK, Carl Kenner, dancinninjac"
-msgstr "Glitch, Carl Kenner, dancinninjac"
-
 msgid "Cheats"
 msgstr "作弊"
 
@@ -911,7 +908,7 @@ msgid "Stretch to Fit"
 msgstr "拉伸以适应"
 
 msgid "Super Game Boy border"
-msgstr "Super Game Boy 的边框"
+msgstr "SGB 的边框"
 
 msgid "Super Scope"
 msgstr "超任光枪"
@@ -1062,6 +1059,3 @@ msgstr "光枪"
 
 msgid "Zapper Crosshair"
 msgstr "光枪十字准线"
-
-msgid "Zopenko, Glitch, libertyernie"
-msgstr "Zopenko, cebolleto, libertyernie, bgK"
