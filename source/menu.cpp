@@ -4012,7 +4012,7 @@ static int MenuSettingsMenu()
 #elif defined(ZH_LANG_ONLY)
 				GCSettings.language == LANG_SIMP_CHINESE;
 #endif
-				break;			
+				break;
 			case 6:
 				GCSettings.PreviewImage++;
 				if(GCSettings.PreviewImage >= PREVIEWIMAGE_LENGTH)
