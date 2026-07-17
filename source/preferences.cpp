@@ -547,7 +547,7 @@ decodePrefsData ()
 			loadXMLSetting(&GCSettings.Rumble, "Rumble");
 #ifdef MULTI_LANGUAGES_SUPPORT
 			loadXMLSetting(&GCSettings.language, "language");
-#elif defined(ZHCN_LANGUAGE_ONLY)
+#elif defined(ZH_LANG_ONLY)
 			GCSettings.language = LANG_SIMP_CHINESE;
 #endif
 			loadXMLSetting(&GCSettings.PreviewImage, "PreviewImage");
@@ -713,7 +713,7 @@ DefaultSettings ()
 #else
 	GCSettings.language = SYS_GetLanguage() + LANG_ENGLISH;
 #endif
-#elif defined(ZHCN_LANGUAGE_ONLY) // #ifdef MULTI_LANGUAGES_SUPPORT
+#elif defined(ZH_LANG_ONLY) // #ifdef MULTI_LANGUAGES_SUPPORT
 	GCSettings.language = LANG_SIMP_CHINESE;
 #endif // #ifdef MULTI_LANGUAGES_SUPPORT
 
