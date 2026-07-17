@@ -481,7 +481,7 @@ u32 StandardSideways(unsigned short pad)
 		J |= VBA_BUTTON_B;
 	if (wp & WPAD_BUTTON_2)
 		J |= VBA_BUTTON_A;
-	if (cartridgeType == 2)
+	if (cartridgeType == CARTRIDGE_GBA)
 	{
 		if (wp & WPAD_BUTTON_A)
 			J |= VBA_BUTTON_R;
@@ -891,7 +891,7 @@ static u32 DecodeJoy(unsigned short pad)
 	u32 J = StandardMovement(pad);
 
 	// Turbo feature
-	if (GCSettings.TurboModeEnabled == 1)
+	if (GCSettings.TurboModeEnabled)
 	{
 		if(userInput[0].pad.substickX > 70 || 
 			userInput[0].WPAD_Stick(1,0) > 70 ||

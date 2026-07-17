@@ -17,7 +17,7 @@
 #include "utils/FreeTypeGX.h"
 
 #define APPNAME 		"Visual Boy Advance GX"
-#define APPVERSION 		"2.5.1"
+#define APPVERSION 		"3.0.0"
 #define APPFOLDER 		"vbagx"
 #define PREF_FILE_NAME 	"settings.xml"
 #define PAL_FILE_NAME 	"palettes.xml"
@@ -39,6 +39,7 @@ enum
 	DEVICE_SD_SLOTB,
 	DEVICE_SD_PORT2,
 	DEVICE_SD_GCLOADER,
+	DEVICE_LENGTH
 };
 
 enum {
@@ -75,13 +76,88 @@ const FolderDef loadFolder[] = {
 enum 
 {
 	FILE_SRAM,
-	FILE_SNAPSHOT,
+	FILE_STATE,
 	FILE_ROM,
 	FILE_BORDER_PNG
 };
 
-enum 
-{
+enum {
+	AUTOLOAD_OFF = 0,
+	AUTOLOAD_SRAM,
+	AUTOLOAD_STATE
+};
+
+enum {
+	AUTOSAVE_OFF = 0,
+	AUTOSAVE_SRAM,
+	AUTOSAVE_STATE,
+	AUTOSAVE_BOTH
+};
+
+enum {
+	PREVIEWIMAGE_SCREENSHOT = 0,
+	PREVIEWIMAGE_COVER,
+	PREVIEWIMAGE_ARTWORK,
+	PREVIEWIMAGE_LENGTH
+};
+
+enum {
+	RENDER_FILTERED = 1,
+	RENDER_UNFILTERED,
+	RENDER_FILTERED_SOFT,
+	RENDER_FILTERED_SHARP,
+	RENDER_LENGTH
+};
+
+enum {
+	VIDEOMODE_AUTO = 0,
+	VIDEOMODE_NTSC,
+	VIDEOMODE_PROGRESSIVE,
+	VIDEOMODE_PAL,
+	VIDEOMODE_EURGB,
+	VIDEOMODE_240P,
+	VIDEOMODE_EURGB_240P,
+	VIDEOMODE_LENGTH
+};
+
+enum {
+	WIIMOTEORIENTATION_VERTICAL = 0,
+	WIIMOTEORIENTATION_HORIZONTAL,
+	WIIMOTEORIENTATION_LENGTH
+};
+
+enum {
+	SCALING_MAINTAIN_ASPECT = 0,
+	SCALING_PARTIAL_STRETCH,
+	SCALING_STRETCH_TO_FIT,
+	SCALING_WIDESCREEN_CORRECTION,
+	SCALING_LENGTH
+};
+
+enum {
+	GBHARDWARE_AUTO = 0,
+	GBHARDWARE_GBC,
+	GBHARDWARE_SGB,
+	GBHARDWARE_GB,
+	GBHARDWARE_GBA,
+	GBHARDWARE_SGB2,
+	GBHARDWARE_LENGTH
+};
+
+enum {
+	SGBBORDER_OFF = 0,
+	SGBBORDER_FROMGAME,
+	SGBBORDER_FROMPNG,
+	SGBBORDER_LENGTH
+};
+
+enum {
+	BASICPALETTE_GREEN = 0,
+	BASICPALETTE_MONOCHROME,
+	BASICPALETTE_LENGTH
+};
+
+enum {
 	LANG_JAPANESE = 0,
 	LANG_ENGLISH,
 	LANG_GERMAN,
@@ -112,24 +188,25 @@ struct SGCSettings
 	int		AutoSave;
 	int		LoadMethod;    // For ROMS: Auto, SD, DVD, USB, Network (SMB)
 	int		SaveMethod;    // For SRAM, Freeze, Prefs: Auto, SD, USB, SMB
-	int		AppendAuto;    // 0 - no, 1 - yes
+	bool	AppendAuto;
 	int		videomode;     // 0 - automatic, 1 - NTSC (480i), 2 - Progressive (480p), 3 - PAL (50Hz), 4 - PAL (60Hz)
 	int		scaling;       // 0 - default, 1 - partial stretch, 2 - stretch to fit, 3 - widescreen correction
-	int		render;		   // 0 - original, 1 - filtered, 2 - unfiltered
+	int		render;		   // 1 - filtered, 2 - unfiltered
+	int		FilterMethod; // convert to RenderFilter
 	int		xshift;		   // video output shift
 	int		yshift;
-	int		colorize;      // colorize Mono Gameboy games
-	int		gbaFrameskip;  // turn on auto-frameskip for GBA games
-	int		WiiControls;   // Match Wii Game
+	bool	colorize;      // colorize Mono Gameboy games
+	bool	gbaFrameskip;  // turn on auto-frameskip for GBA games
+	bool	WiiControls;   // Match Wii Game
 	int		WiimoteOrientation;
 	int		ExitAction;
 	int		MusicVolume;
 	int		SFXVolume;
-	int		Rumble;
+	bool	Rumble;
 	int 	language;
 	int		PreviewImage;
-	int		TurboModeEnabled; // 0 - disabled, 1 - enabled
-	int		AutoloadGame;
+	bool	TurboModeEnabled; // 0 - disabled, 1 - enabled
+	bool	AutoloadGame;
 	
 	int		OffsetMinutesUTC; // Used for clock on MBC3 and TAMA5
 	int 	GBHardware;    // Mapped to gbEmulatorType in VBA
@@ -151,25 +228,11 @@ struct SGCSettings
 };
 
 void ExitApp();
-void ShutdownWii();
-bool SupportedIOS(u32 ios);
-bool SaneIOS(u32 ios);
 extern struct SGCSettings GCSettings;
 extern int ScreenshotRequested;
 extern int ConfigRequested;
-extern int ShutdownRequested;
-extern int ExitRequested;
 extern char appPath[];
 
 extern FreeTypeGX *fontSystem[];
-extern bool isWiiVC;
-static inline bool IsWiiU(void)
-{
-	return ((*(vu16*)0xCD8005A0 == 0xCAFE) || isWiiVC);
-}
-static inline bool IsWiiUFastCPU(void)
-{
-	return ((*(vu16*)0xCD8005A0 == 0xCAFE) && ((*(vu32*)0xCD8005B0 & 0x20) == 0));
-}
 
 #endif

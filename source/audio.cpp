@@ -13,28 +13,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef NO_SOUND
 #include <asndlib.h>
-
+#endif
 #include "audio.h"
 
 extern int ConfigRequested;
 
 /** Locals **/
-static int head = 0;
-static int tail = 0;
+// head is written by the emulator thread (write) and read by the DMA
+// callback (interrupt context); tail is the reverse. They MUST be volatile
+// so the compiler does not cache them in registers across the thread/ISR
+// boundary, otherwise the consumer never observes the producer's updates.
+static volatile int head = 0;
+static volatile int tail = 0;
 static int gameType = 0;
 
 #define MIXBUFFSIZE 0x10000
-static u8 mixerdata[MIXBUFFSIZE];
+// Accessed as u32 below, and (indirectly) feeds DMA, so require 32-byte
+// alignment. Without this the u32 casts rely on undefined alignment.
+static u8 mixerdata[MIXBUFFSIZE] ATTRIBUTE_ALIGN(32);
 #define MIXERMASK ((MIXBUFFSIZE >> 2) - 1)
-#define SWAP(x) ((x>>16)|(x<<16)) // for reversing stereo channels
+#define SWAP(x) (((x)>>16) | ((x)<<16)) // for reversing stereo channels
+
+// One DMA frame is 3200 bytes (800 stereo 16-bit frames). The hardware
+// buffer is sized to 3840 with 32-byte-aligned length headroom.
+#define DMA_BYTES 3200
 
 static u8 soundbuffer[2][3840] ATTRIBUTE_ALIGN(32);
 static int whichab = 0;
-static int IsPlaying = 0;
+// Read by the emulator thread (write) and written by the DMA callback.
+static volatile int IsPlaying = 0;
 
 /****************************************************************************
  * MIXER_GetSamples
+ *
+ * Drains up to maxlen bytes from the ring buffer into dstbuffer. Any space
+ * not filled (a buffer underrun) is left as silence by the initial memset.
+ * Returns the number of bytes the caller should hand to the DMA engine,
+ * which is always a fixed-size, 32-byte-aligned frame.
  ***************************************************************************/
 static int MIXER_GetSamples(u8 *dstbuffer, int maxlen)
 {
@@ -42,16 +59,28 @@ static int MIXER_GetSamples(u8 *dstbuffer, int maxlen)
 	u32 *dst = (u32 *)dstbuffer;
 	u32 intlen = maxlen >> 2;
 
+	// Pre-pack the block with silence (handles all underrun scenarios natively)
 	memset(dstbuffer, 0, maxlen);
 
-	while( ( head != tail ) && intlen )
+	// Snapshot indices once to keep the volatile hardware bus quiet
+	int localTail = tail;
+	int producer = head;
+
+	for(u32 i = 0; i < intlen; i++)
 	{
-		*dst++ = src[tail++];
-		tail &= MIXERMASK;
-		intlen--;
+		// If consumer catches producer, ring buffer is dry.
+		// Break instantly; the memset above already padded the remainder with silence.
+		if(localTail == producer)
+			break;
+
+		*dst++ = src[localTail];
+		localTail = (localTail + 1) & MIXERMASK;
 	}
 
-	return 3200;
+	// Atomically publish the final index back to the emulator core
+	tail = localTail;
+
+	return maxlen;
 }
 
 /****************************************************************************
@@ -63,7 +92,7 @@ static void AudioPlayer()
 	if (!ConfigRequested)
 	{
 		whichab ^= 1;
-		int len = MIXER_GetSamples(soundbuffer[whichab], 3200);
+		int len = MIXER_GetSamples(soundbuffer[whichab], DMA_BYTES);
 		DCFlushRange(soundbuffer[whichab],len);
 		AUDIO_InitDMA((u32)soundbuffer[whichab],len);
 		IsPlaying = 1;
@@ -180,21 +209,42 @@ void SoundWii::write(u16 * finalWave, int length)
 {
 	u32 *src = (u32 *)finalWave;
 	u32 *dst = (u32 *)mixerdata;
-	u32 intlen = (3200 >> 2);
+	u32 intlen = (DMA_BYTES >> 2);
 	u32 fixofs = 0;
 	u32 fixinc = 60211; // length = 2940 - GB
 
 	if (gameType == 2) // length = 1468 - GBA
 		fixinc = 30065;
 
+	// length is given in bytes; the source is read as u32 (one 4-byte packed
+	// stereo frame), so clamp the highest index we may read.
+	u32 maxSrcIndex = (length > 3) ? (u32)((length >> 2) - 1) : 0;
+
+	// Work on a local copy of the volatile producer index and publish it once
+	// at the end. This avoids a memory round-trip on every loop iteration and
+	// lets us bounds-check against the consumer to prevent overrunning audio
+	// that has not been played yet.
+	int localHead = head;
+	int consumer = tail;
+
 	do
 	{
+		u32 srcIndex = fixofs >> 16;
+		if (srcIndex > maxSrcIndex)
+			srcIndex = maxSrcIndex;
+
+		int next = (localHead + 1) & MIXERMASK;
+		if (next == consumer)
+			break; // ring buffer full: drop rather than clobber unplayed data
+
 		// Do simple linear interpolate, and swap channels from L-R to R-L
-		dst[head++] = SWAP(src[fixofs >> 16]);
-		head &= MIXERMASK;
+		dst[localHead] = SWAP(src[srcIndex]);
+		localHead = next;
 		fixofs += fixinc;
 	}
 	while( --intlen );
+
+	head = localHead; // publish to the DMA callback
 
 	// Restart Sound Processing if stopped
 	if (IsPlaying == 0)

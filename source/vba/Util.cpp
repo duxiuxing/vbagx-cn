@@ -18,27 +18,19 @@ extern "C" {
 #include "gba/RTC.h"
 #include "common/Port.h"
 
-#ifndef NO_FEX
-#include "fex/fex.h"
-#endif
-
 extern "C" {
 #include "common/memgzio.h"
 }
 
 #include "gb/gbGlobals.h"
 
-#ifndef _MSC_VER
 #define _stricmp strcasecmp
-#endif // ! _MSC_VER
 
-extern int systemColorDepth;
 extern int systemRedShift;
 extern int systemGreenShift;
 extern int systemBlueShift;
 
 extern u16 systemColorMap16[0x10000];
-extern u32 *systemColorMap32;
 
 static int (ZEXPORT *utilGzWriteFunc)(gzFile, const voidp, unsigned int) = NULL;
 static int (ZEXPORT *utilGzReadFunc)(gzFile, voidp, unsigned int) = NULL;
@@ -99,71 +91,21 @@ bool utilWritePNGFile(const char *fileName, int w, int h, u8 *pix)
   int sizeX = w;
   int sizeY = h;
 
-  switch(systemColorDepth) {
-  case 16:
-    {
-      u16 *p = (u16 *)(pix+(w+2)*2); // skip first black line
-      for(int y = 0; y < sizeY; y++) {
-         for(int x = 0; x < sizeX; x++) {
-          u16 v = *p++;
+   u16 *p = (u16 *)(pix+(w+2)*2); // skip first black line
+   for(int y = 0; y < sizeY; y++) {
+	  for(int x = 0; x < sizeX; x++) {
+	   u16 v = *p++;
 
-          *b++ = ((v >> systemRedShift) & 0x001f) << 3; // R
-          *b++ = ((v >> systemGreenShift) & 0x001f) << 3; // G
-          *b++ = ((v >> systemBlueShift) & 0x01f) << 3; // B
-        }
-        p++; // skip black pixel for filters
-        p++; // skip black pixel for filters
-        png_write_row(png_ptr,writeBuffer);
+	   *b++ = ((v >> systemRedShift) & 0x001f) << 3; // R
+	   *b++ = ((v >> systemGreenShift) & 0x001f) << 3; // G
+	   *b++ = ((v >> systemBlueShift) & 0x01f) << 3; // B
+	 }
+	 p++; // skip black pixel for filters
+	 p++; // skip black pixel for filters
+	 png_write_row(png_ptr,writeBuffer);
 
-        b = writeBuffer;
-      }
-    }
-    break;
-  case 24:
-    {
-      u8 *pixU8 = (u8 *)pix;
-      for(int y = 0; y < sizeY; y++) {
-        for(int x = 0; x < sizeX; x++) {
-          if(systemRedShift < systemBlueShift) {
-            *b++ = *pixU8++; // R
-            *b++ = *pixU8++; // G
-            *b++ = *pixU8++; // B
-          } else {
-            int blue = *pixU8++;
-            int green = *pixU8++;
-            int red = *pixU8++;
-
-            *b++ = red;
-            *b++ = green;
-            *b++ = blue;
-          }
-        }
-        png_write_row(png_ptr,writeBuffer);
-
-        b = writeBuffer;
-      }
-    }
-    break;
-  case 32:
-    {
-      u32 *pixU32 = (u32 *)(pix+4*(w+1));
-      for(int y = 0; y < sizeY; y++) {
-        for(int x = 0; x < sizeX; x++) {
-          u32 v = *pixU32++;
-
-          *b++ = ((v >> systemRedShift) & 0x001f) << 3; // R
-          *b++ = ((v >> systemGreenShift) & 0x001f) << 3; // G
-          *b++ = ((v >> systemBlueShift) & 0x001f) << 3; // B
-        }
-        pixU32++;
-
-        png_write_row(png_ptr,writeBuffer);
-
-        b = writeBuffer;
-      }
-    }
-    break;
-  }
+	 b = writeBuffer;
+   }
 
   png_write_end(png_ptr, info_ptr);
 
@@ -242,74 +184,22 @@ bool utilWriteBMPFile(const char *fileName, int w, int h, u8 *pix)
   int sizeX = w;
   int sizeY = h;
 
-  switch(systemColorDepth) {
-  case 16:
-    {
-      u16 *p = (u16 *)(pix+(w+2)*(h)*2); // skip first black line
-      for(int y = 0; y < sizeY; y++) {
-        for(int x = 0; x < sizeX; x++) {
-          u16 v = *p++;
+  u16 *p = (u16 *)(pix+(w+2)*(h)*2); // skip first black line
+	for(int y = 0; y < sizeY; y++) {
+	  for(int x = 0; x < sizeX; x++) {
+		u16 v = *p++;
 
-          *b++ = ((v >> systemBlueShift) & 0x01f) << 3; // B
-          *b++ = ((v >> systemGreenShift) & 0x001f) << 3; // G
-          *b++ = ((v >> systemRedShift) & 0x001f) << 3; // R
-        }
-        p++; // skip black pixel for filters
-        p++; // skip black pixel for filters
-        p -= 2*(w+2);
-        fwrite(writeBuffer, 1, 3*w, fp);
+		*b++ = ((v >> systemBlueShift) & 0x01f) << 3; // B
+		*b++ = ((v >> systemGreenShift) & 0x001f) << 3; // G
+		*b++ = ((v >> systemRedShift) & 0x001f) << 3; // R
+	  }
+	  p++; // skip black pixel for filters
+	  p++; // skip black pixel for filters
+	  p -= 2*(w+2);
+	  fwrite(writeBuffer, 1, 3*w, fp);
 
-        b = writeBuffer;
-      }
-    }
-    break;
-  case 24:
-    {
-      u8 *pixU8 = (u8 *)pix+3*w*(h-1);
-      for(int y = 0; y < sizeY; y++) {
-        for(int x = 0; x < sizeX; x++) {
-          if(systemRedShift > systemBlueShift) {
-            *b++ = *pixU8++; // B
-            *b++ = *pixU8++; // G
-            *b++ = *pixU8++; // R
-          } else {
-            int red = *pixU8++;
-            int green = *pixU8++;
-            int blue = *pixU8++;
-
-            *b++ = blue;
-            *b++ = green;
-            *b++ = red;
-          }
-        }
-        pixU8 -= 2*3*w;
-        fwrite(writeBuffer, 1, 3*w, fp);
-
-        b = writeBuffer;
-      }
-    }
-    break;
-  case 32:
-    {
-      u32 *pixU32 = (u32 *)(pix+4*(w+1)*(h));
-      for(int y = 0; y < sizeY; y++) {
-        for(int x = 0; x < sizeX; x++) {
-          u32 v = *pixU32++;
-
-          *b++ = ((v >> systemBlueShift) & 0x001f) << 3; // B
-          *b++ = ((v >> systemGreenShift) & 0x001f) << 3; // G
-          *b++ = ((v >> systemRedShift) & 0x001f) << 3; // R
-        }
-        pixU32++;
-        pixU32 -= 2*(w+1);
-
-        fwrite(writeBuffer, 1, 3*w, fp);
-
-        b = writeBuffer;
-      }
-    }
-    break;
-  }
+	  b = writeBuffer;
+	}
 
   fclose(fp);
 
@@ -388,59 +278,10 @@ void utilStripDoubleExtension(const char *file, char *buffer)
   }
 }
 
-#ifndef NO_FEX
-// Opens and scans archive using accept(). Returns fex_t if found.
-// If error or not found, displays message and returns NULL.
-static fex_t* scan_arc(const char *file, bool (*accept)(const char *),
-		char (&buffer) [2048] )
-{
-	fex_t* fe;
-	fex_err_t err = fex_open( &fe, file );
-	if(!fe)
-	{
-		systemMessage(MSG_CANNOT_OPEN_FILE, N_("Cannot open file %s: %s"), file, err);
-		return NULL;
-	}
-
-	// Scan filenames
-	bool found=false;
-	while(!fex_done(fe)) {
-		strncpy(buffer,fex_name(fe),sizeof buffer);
-		buffer [sizeof buffer-1] = '\0';
-
-		utilStripDoubleExtension(buffer, buffer);
-
-		if(accept(buffer)) {
-			found = true;
-			break;
-		}
-
-		fex_err_t err = fex_next(fe);
-		if(err) {
-			systemMessage(MSG_BAD_ZIP_FILE, N_("Cannot read archive %s: %s"), file, err);
-			fex_close(fe);
-			return NULL;
-		}
-	}
-
-	if(!found) {
-		systemMessage(MSG_NO_IMAGE_ON_ZIP,
-									N_("No image found in file %s"), file);
-		fex_close(fe);
-		return NULL;
-	}
-	return fe;
-}
-#endif
-
 static bool utilIsImage(const char *file)
 {
 	return utilIsGBAImage(file) || utilIsGBImage(file);
 }
-
-#ifdef WIN32
-#include <Windows.h>
-#endif
 
 IMAGE_TYPE utilFindType(const char *file, char (&buffer)[2048]);
 
@@ -452,37 +293,6 @@ IMAGE_TYPE utilFindType(const char *file)
 
 IMAGE_TYPE utilFindType(const char *file, char (&buffer)[2048])
 {
-#ifndef NO_FEX
-#ifdef WIN32
-	DWORD dwNum = MultiByteToWideChar (CP_ACP, 0, file, -1, NULL, 0);
-	wchar_t *pwText;
-	pwText = new wchar_t[dwNum];
-	if(!pwText)
-	{
-		return IMAGE_UNKNOWN;
-	}
-	MultiByteToWideChar (CP_ACP, 0, file, -1, pwText, dwNum );
-	char* file_conv = fex_wide_to_path( pwText);
-//	if ( !utilIsImage( file_conv ) ) // TODO: utilIsArchive() instead?
-//	{
-		fex_t* fe = scan_arc(file_conv,utilIsImage,buffer);
-		if(!fe)
-			return IMAGE_UNKNOWN;
-		fex_close(fe);
-		file = buffer;
-//	}
-	free(file_conv);
-#else
-//	if ( !utilIsImage( file ) ) // TODO: utilIsArchive() instead?
-//	{
-		fex_t* fe = scan_arc(file,utilIsImage,buffer);
-		if(!fe)
-			return IMAGE_UNKNOWN;
-		fex_close(fe);
-		file = buffer;
-//	}
-#endif
-#endif
 	return utilIsGBAImage(file) ? IMAGE_GBA : IMAGE_GB;
 }
 
@@ -501,38 +311,11 @@ u8 *utilLoad(const char *file,
 {
 	// find image file
 	char buffer [2048];
-#ifdef NO_FEX
+
 	FILE* f = fopen(file, "rb");
 	fseek(f, 0, SEEK_END);
 	int fileSize = ftell(f);
 	fseek(f, 0, SEEK_SET);
-#else
-#ifdef WIN32
-	DWORD dwNum = MultiByteToWideChar (CP_ACP, 0, file, -1, NULL, 0);
-	wchar_t *pwText;
-	pwText = new wchar_t[dwNum];
-	if(!pwText)
-	{
-		return NULL;
-	}
-	MultiByteToWideChar (CP_ACP, 0, file, -1, pwText, dwNum );
-	char* file_conv = fex_wide_to_path( pwText);
-	delete []pwText;
-	fex_t *fe = scan_arc(file_conv,accept,buffer);
-	if(!fe)
-		return NULL;
-	free(file_conv);
-#else
-	fex_t *fe = scan_arc(file,accept,buffer);
-	if(!fe)
-		return NULL;
-#endif
-	// Allocate space for image
-	fex_err_t err = fex_stat(fe);
-	int fileSize = fex_size(fe);
-	if(size == 0)
-		size = fileSize;
-#endif
 
 	u8 *image = data;
 
@@ -540,11 +323,8 @@ u8 *utilLoad(const char *file,
 		// allocate buffer memory if none was passed to the function
 		image = (u8 *)malloc(utilGetSize(size));
 		if(image == NULL) {
-#ifdef NO_FEX
 			fclose(f);
-#else
-			fex_close(fe);
-#endif
+
 			systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
 										"data");
 			return NULL;
@@ -554,14 +334,11 @@ u8 *utilLoad(const char *file,
 
 	// Read image
 	int read = fileSize <= size ? fileSize : size; // do not read beyond file
-#ifdef NO_FEX
+
 	int br = fread(image, 1, read, f);
 	const char* err = (br < read) ? "too few bytes from fread" : NULL;
 	fclose(f);
-#else
-	err = fex_read(fe, image, read);
-	fex_close(fe);
-#endif
+
 	if(err) {
 		systemMessage(MSG_ERROR_READING_IMAGE,
 									N_("Error reading image from %s: %s"), buffer, err);
@@ -707,29 +484,12 @@ void utilGBAFindSave(const u8 *data, const int size)
 
 void utilUpdateSystemColorMaps(bool lcd)
 {
-  switch(systemColorDepth) {
-  case 16:
-    {
-      for(int i = 0; i < 0x10000; i++) {
-        systemColorMap16[i] = ((i & 0x1f) << systemRedShift) |
-          (((i & 0x3e0) >> 5) << systemGreenShift) |
-          (((i & 0x7c00) >> 10) << systemBlueShift);
-      }
-      if (lcd) gbafilter_pal(systemColorMap16, 0x10000);
-    }
-    break;
-  case 24:
-  case 32:
-    {
-      for(int i = 0; i < 0x10000; i++) {
-        systemColorMap32[i] = ((i & 0x1f) << systemRedShift) |
-          (((i & 0x3e0) >> 5) << systemGreenShift) |
-          (((i & 0x7c00) >> 10) << systemBlueShift);
-      }
-      if (lcd) gbafilter_pal32(systemColorMap32, 0x10000);
-    }
-    break;
-  }
+	for(int i = 0; i < 0x10000; i++) {
+		systemColorMap16[i] = ((i & 0x1f) << systemRedShift) |
+		(((i & 0x3e0) >> 5) << systemGreenShift) |
+		(((i & 0x7c00) >> 10) << systemBlueShift);
+	}
+	if (lcd) gbafilter_pal(systemColorMap16, 0x10000);
 }
 
 // Check for existence of file.

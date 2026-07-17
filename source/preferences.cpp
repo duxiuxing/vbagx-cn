@@ -17,6 +17,7 @@
 #include <mxml.h>
 
 #include "vbagx.h"
+#include "system.h"
 #include "menu.h"
 #include "fileop.h"
 #include "video.h"
@@ -24,6 +25,7 @@
 #include "input.h"
 #include "button_mapping.h"
 #include "gamesettings.h"
+#include "videofilters.h"
 
 struct SGCSettings GCSettings;
 static gamePalette *palettes = NULL;
@@ -53,6 +55,10 @@ static mxml_node_t *mxmlFindNewElement(mxml_node_t *parent, const char *nodename
 
 static char temp[20];
 
+static const char* BtoStr(bool b)
+{
+    return b ? "1" : "0";
+}
 static const char * toStr(int i)
 {
 	sprintf(temp, "%d", i);
@@ -170,7 +176,7 @@ preparePrefsData ()
 	createXMLSetting("LoadFolder", "Load Folder", GCSettings.LoadFolder);
 	createXMLSetting("LastFileLoaded", "Last File Loaded", GCSettings.LastFileLoaded);
 	createXMLSetting("SaveFolder", "Save Folder", GCSettings.SaveFolder);
-	createXMLSetting("AppendAuto", "Append Auto to .SAV Files", toStr(GCSettings.AppendAuto));
+	createXMLSetting("AppendAuto", "Append Auto to .SAV Files", BtoStr(GCSettings.AppendAuto));
 	createXMLSetting("ScreenshotsFolder", "Screenshots Folder", GCSettings.ScreenshotsFolder);
 	createXMLSetting("BorderFolder", "SGB Borders Folder", GCSettings.BorderFolder);
 	createXMLSetting("CoverFolder", "Covers Folder", GCSettings.CoverFolder);
@@ -193,12 +199,13 @@ preparePrefsData ()
 	createXMLSetting("gbFixed", "GB Fixed Pixel Ratio", toStr(GCSettings.gbFixed));
 	createXMLSetting("gbaFixed", "GBA Fixed Pixel Ratio", toStr(GCSettings.gbaFixed));
 	createXMLSetting("render", "Video Filtering", toStr(GCSettings.render));
+	createXMLSetting("FilterMethod", "Filter Method", toStr(GCSettings.FilterMethod));
 	createXMLSetting("scaling", "Aspect Ratio Correction", toStr(GCSettings.scaling));
 	createXMLSetting("xshift", "Horizontal Video Shift", toStr(GCSettings.xshift));
 	createXMLSetting("yshift", "Vertical Video Shift", toStr(GCSettings.yshift));
-	createXMLSetting("colorize", "Colorize Mono Gameboy", toStr(GCSettings.colorize));
-	createXMLSetting("gbaFrameskip", "GBA Frameskip", toStr(GCSettings.gbaFrameskip));
-	createXMLSetting("TurboModeEnabled", "Turbo Mode Enabled", toStr(GCSettings.TurboModeEnabled));
+	createXMLSetting("colorize", "Colorize Mono Gameboy", BtoStr(GCSettings.colorize));
+	createXMLSetting("gbaFrameskip", "GBA Frameskip", BtoStr(GCSettings.gbaFrameskip));
+	createXMLSetting("TurboModeEnabled", "Turbo Mode Enabled", BtoStr(GCSettings.TurboModeEnabled));
 
 	createXMLSection("Menu", "Menu Settings");
 
@@ -208,7 +215,7 @@ preparePrefsData ()
 	createXMLSetting("ExitAction", "Exit Action", toStr(GCSettings.ExitAction));
 	createXMLSetting("MusicVolume", "Music Volume", toStr(GCSettings.MusicVolume));
 	createXMLSetting("SFXVolume", "Sound Effects Volume", toStr(GCSettings.SFXVolume));
-	createXMLSetting("Rumble", "Rumble", toStr(GCSettings.Rumble));
+	createXMLSetting("Rumble", "Rumble", BtoStr(GCSettings.Rumble));
 	createXMLSetting("language", "Language", toStr(GCSettings.language));
 	createXMLSetting("PreviewImage", "Preview Image", toStr(GCSettings.PreviewImage));
 
@@ -219,7 +226,7 @@ preparePrefsData ()
 	createXMLSection("Controller", "Controller Settings");
 
 	createXMLController(btnmap[CTRLR_GCPAD], "gcpadmap", "GameCube Pad");
-	createXMLSetting("WiiControls", "Match Wii Game", toStr(GCSettings.WiiControls));
+	createXMLSetting("WiiControls", "Match Wii Game", BtoStr(GCSettings.WiiControls));
 	createXMLController(btnmap[CTRLR_WIIMOTE], "wmpadmap", "Wiimote");
 	createXMLController(btnmap[CTRLR_CLASSIC], "ccpadmap", "Classic Controller");
 	createXMLController(btnmap[CTRLR_NUNCHUK], "ncpadmap", "Nunchuk");
@@ -307,6 +314,20 @@ static void loadXMLSetting(char * var, const char * name, int maxsize)
 		const char * tmp = mxmlElementGetAttr(item, "value");
 		if(tmp)
 			snprintf(var, maxsize, "%s", tmp);
+	}
+}
+static void loadXMLSetting(bool * var, const char * name)
+{
+	item = mxmlFindElement(xml, xml, "setting", "name", name, MXML_DESCEND);
+	if(item)
+	{
+		const char * tmp = mxmlElementGetAttr(item, "value");
+		if(tmp) {
+			if (strcmp(tmp, "1") == 0 || strcasecmp(tmp, "true") == 0)
+				*var = true;
+			else
+				*var = false;
+		}
 	}
 }
 static void loadXMLSetting(int * var, const char * name)
@@ -509,6 +530,7 @@ decodePrefsData ()
 			loadXMLSetting(&GCSettings.gbaFixed, "gbaFixed");
 			loadXMLSetting(&GCSettings.gbFixed, "gbFixed");
 			loadXMLSetting(&GCSettings.render, "render");
+			loadXMLSetting(&GCSettings.FilterMethod, "FilterMethod");
 			loadXMLSetting(&GCSettings.scaling, "scaling");
 			loadXMLSetting(&GCSettings.xshift, "xshift");
 			loadXMLSetting(&GCSettings.yshift, "yshift");
@@ -596,9 +618,9 @@ decodePalsData ()
  ***************************************************************************/
 void FixInvalidSettings()
 {
-	if(GCSettings.LoadMethod > 8)
+	if(GCSettings.LoadMethod >= DEVICE_LENGTH)
 		GCSettings.LoadMethod = DEVICE_AUTO;
-	if(GCSettings.SaveMethod > 8)
+	if(GCSettings.SaveMethod >= DEVICE_LENGTH)
 		GCSettings.SaveMethod = DEVICE_AUTO;
 	if(!(GCSettings.gbaZoomHor >= 0.5 && GCSettings.gbaZoomHor <= 1.6))
 		GCSettings.gbaZoomHor = 1.0;
@@ -616,12 +638,14 @@ void FixInvalidSettings()
 		GCSettings.MusicVolume = 20;
 	if(!(GCSettings.SFXVolume >= 0 && GCSettings.SFXVolume <= 100))
 		GCSettings.SFXVolume = 40;
-	if(GCSettings.language < 0 || GCSettings.language >= LANG_LENGTH)
+	if(GCSettings.language < LANG_JAPANESE || GCSettings.language >= LANG_LENGTH)
 		GCSettings.language = LANG_ENGLISH;
-	if(!(GCSettings.render >= 0 && GCSettings.render < 5))
-		GCSettings.render = 1;
-	if(!(GCSettings.videomode >= 0 && GCSettings.videomode < 7))
-		GCSettings.videomode = 0;
+	if(!(GCSettings.render >= RENDER_FILTERED && GCSettings.render < RENDER_LENGTH))
+		GCSettings.render = RENDER_FILTERED_SHARP;
+	if(!(GCSettings.FilterMethod >= FILTER_NONE && GCSettings.FilterMethod <= NUM_FILTERS))
+		GCSettings.FilterMethod = FILTER_NONE;
+	if(!(GCSettings.videomode >= VIDEOMODE_AUTO && GCSettings.videomode < VIDEOMODE_LENGTH))
+		GCSettings.videomode = VIDEOMODE_AUTO;
 }
 
 /****************************************************************************
@@ -644,11 +668,9 @@ DefaultSettings ()
 	sprintf (GCSettings.CoverFolder, "%s/%s", APPFOLDER, loadFolder[LOADFOLDER_COVERS].name); // Path to cover files
 	sprintf (GCSettings.ArtworkFolder, "%s/%s", APPFOLDER, loadFolder[LOADFOLDER_ARTWORK].name); // Path to artwork files
 
-	GCSettings.AutoLoad = 1;
-	GCSettings.AutoSave = 1;
-	GCSettings.AppendAuto = 1;
-
-	GCSettings.WiimoteOrientation = 0;
+	GCSettings.AutoLoad = true;
+	GCSettings.AutoSave = true;
+	GCSettings.AppendAuto = true;
 
 	GCSettings.gbaZoomHor = 1.0; // GBA horizontal zoom level
 	GCSettings.gbaZoomVert = 1.0; // GBA vertical zoom level
@@ -656,26 +678,31 @@ DefaultSettings ()
 	GCSettings.gbZoomVert = 1.0; // GBA vertical zoom level
 	GCSettings.gbFixed = 0; // not fixed - use zoom level
 	GCSettings.gbaFixed = 0; // not fixed - use zoom level
-	GCSettings.videomode = 0; // automatic video mode detection
-	GCSettings.render = 1; // Filtered
-	GCSettings.scaling = 1; // partial stretch
+	GCSettings.videomode = VIDEOMODE_AUTO;
+	GCSettings.render = RENDER_FILTERED_SHARP;
+	GCSettings.FilterMethod = FILTER_NONE;
+	GCSettings.scaling = SCALING_PARTIAL_STRETCH;
 	GCSettings.WiiControls = false; // Match Wii Game
 
 	GCSettings.xshift = 0; // horizontal video shift
 	GCSettings.yshift = 0; // vertical video shift
-	GCSettings.colorize = 0; // Colorize mono gameboy games
-	GCSettings.gbaFrameskip = 1; // Turn auto-frameskip on for GBA games
-	GCSettings.TurboModeEnabled = 1; // Enabled by default
+	GCSettings.colorize = false; // Colorize mono gameboy games
+	GCSettings.gbaFrameskip = true; // Turn auto-frameskip on for GBA games
+	GCSettings.TurboModeEnabled = true; // Enabled by default
 
-	GCSettings.WiimoteOrientation = 0;
-	GCSettings.ExitAction = 0;
-	GCSettings.AutoloadGame = 0;
+	GCSettings.WiimoteOrientation = WIIMOTEORIENTATION_VERTICAL;
+#ifdef HW_RVL
+	GCSettings.ExitAction = EXITACTION_WII_AUTO;
+#else
+	GCSettings.ExitAction = EXITACTION_GC_RETURN_TO_LOADER;
+#endif
+	GCSettings.AutoloadGame = false;
 	GCSettings.MusicVolume = 20;
 	GCSettings.SFXVolume = 40;
-	GCSettings.Rumble = 1;
-	GCSettings.PreviewImage = 0;
+	GCSettings.Rumble = true;
+	GCSettings.PreviewImage = PREVIEWIMAGE_COVER;
 	
-	GCSettings.BasicPalette = 0;
+	GCSettings.BasicPalette = BASICPALETTE_GREEN;
 
 #ifdef MULTI_LANGUAGES_SUPPORT
 #ifdef HW_RVL
@@ -691,8 +718,8 @@ DefaultSettings ()
 #endif // #ifdef MULTI_LANGUAGES_SUPPORT
 
 	GCSettings.OffsetMinutesUTC = 0;
-	GCSettings.GBHardware = 0;
-	GCSettings.SGBBorder = 0;
+	GCSettings.GBHardware = GBHARDWARE_AUTO;
+	GCSettings.SGBBorder = SGBBORDER_OFF;
 }
 
 
@@ -802,7 +829,6 @@ LoadPrefsFromMethod (char * path)
  * Checks sources consecutively until we find a preference file
  ***************************************************************************/
 static bool prefLoadAttempted = false;
-static bool prefFound = false;
 
 bool LoadPrefs()
 {
@@ -843,7 +869,7 @@ bool LoadPrefs()
 
 	FixInvalidSettings();
 
-	if(GCSettings.videomode > 0) {
+	if(GCSettings.videomode > VIDEOMODE_AUTO) {
 		ResetVideo_Menu();
 	}
 

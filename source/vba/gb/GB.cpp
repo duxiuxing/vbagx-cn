@@ -608,28 +608,6 @@ void gbGenFilter()
   }
 }
 
-bool gbIsGameboyRom(char * file)
-{
-  if(strlen(file) > 4) {
-    char * p = strrchr(file,'.');
-
-    if(p != NULL) {
-      if(_stricmp(p, ".gb") == 0)
-        return true;
-      if(_stricmp(p, ".dmg") == 0)
-        return true;
-      if(_stricmp(p, ".gbc") == 0)
-        return true;
-      if(_stricmp(p, ".cgb") == 0)
-        return true;
-      if(_stricmp(p, ".sgb") == 0)
-        return true;
-    }
-  }
-
-  return false;
-}
-
 void gbCopyMemory(u16 d, u16 s, int count)
 {
   while(count) {
@@ -709,15 +687,6 @@ void  gbWriteMemory(u16 address, u8 value)
 {
 
   if(address < 0x8000) {
-#ifndef FINAL_VERSION
-    if(memorydebug && (address>0x3fff || address < 0x2000)) {
-      log("Memory register write %04x=%02x PC=%04x\n",
-          address,
-          value,
-          PC.W);
-    }
-
-#endif
     if(mapper)
       (*mapper)(address, value);
     return;
@@ -742,15 +711,6 @@ void  gbWriteMemory(u16 address, u8 value)
     address &= ~0x2000;
 
   if(address < 0xc000) {
-#ifndef FINAL_VERSION
-    if(memorydebug) {
-      log("Memory register write %04x=%02x PC=%04x\n",
-          address,
-          value,
-          PC.W);
-    }
-#endif
-
     // Is that a correct fix ??? (it used to be 'if (mapper)')...
     if(mapperRAM)
         (*mapperRAM)(address, value);
@@ -1771,14 +1731,6 @@ u8 gbReadMemory(u16 address)
     address &= ~0x2000;
 
   if(address < 0xc000) {
-#ifndef FINAL_VERSION
-    if(memorydebug) {
-      log("Memory register read %04x PC=%04x\n",
-          address,
-          PC.W);
-    }
-#endif
-
   // for the 2kb ram limit (fixes crash in shawu's story
   // but now its sram test fails, as the it expects 8kb and not 2kb...
   // So use the 'genericflashcard' option to fix it).
@@ -2100,44 +2052,6 @@ void gbSpeedSwitch()
       gbLine99Ticks++;
   }
   gbDmaTicks += (134)*GBLY_INCREMENT_CLOCK_TICKS + (37<<(gbSpeed ? 1 : 0));
-}
-
-bool CPUIsGBBios(const char * file)
-{
-  if(strlen(file) > 4) {
-    const char * p = strrchr(file,'.');
-
-    if(p != NULL) {
-      if(_stricmp(p, ".gb") == 0)
-        return true;
-      if(_stricmp(p, ".bin") == 0)
-        return true;
-      if(_stricmp(p, ".bios") == 0)
-        return true;
-      if(_stricmp(p, ".rom") == 0)
-        return true;
-    }
-  }
-
-  return false;
-}
-
-void gbCPUInit(const char *biosFileName, bool useBiosFile)
-{
-  useBios = false;
-  if (useBiosFile)
-  {
-/*    int size = 0x100;
-    if(utilLoad(biosFileName,
-                CPUIsGBBios,
-                bios,
-                size)) {
-      if(size == 0x100)
-        useBios = true;
-      else
-        systemMessage(MSG_INVALID_BIOS_FILE_SIZE, N_("Invalid BOOTROM file size"));
-    }*/
-  }
 }
 
 void gbGetHardwareType()
@@ -3251,198 +3165,6 @@ void gbInit()
   gbLineBuffer = (u16 *)malloc(160 * sizeof(u16));
 }
 
-bool gbWriteBatteryFile(const char *file, bool extendedSave)
-{
-  if(gbBattery) {
-    switch(gbRomType) {
-    case 0x03:
-      gbWriteSaveMBC1(file);
-      break;
-    case 0x06:
-      gbWriteSaveMBC2(file);
-      break;
-    case 0x0d:
-      gbWriteSaveMMM01(file);
-      break;
-    case 0x0f:
-    case 0x10:
-      gbWriteSaveMBC3(file, extendedSave);
-      break;
-    case 0x13:
-    case 0xfc:
-      gbWriteSaveMBC3(file, false);
-    case 0x1b:
-    case 0x1e:
-      gbWriteSaveMBC5(file);
-      break;
-    case 0x22:
-      gbWriteSaveMBC7(file);
-      break;
-    case 0xfd:
-      gbWriteSaveTAMA5(file, extendedSave);
-      break;
-    case 0xff:
-      gbWriteSaveMBC1(file);
-      break;
-    }
-  }
-  return true;
-}
-
-bool gbWriteBatteryFile(const char *file)
-{
-  if (!gbBatteryError)
-  {
-    gbWriteBatteryFile(file, true);
-    return true;
-  }
-  else return false;
-}
-
-bool gbReadBatteryFile(const char *file)
-{
-  bool res = false;
-  if(gbBattery) {
-    switch(gbRomType) {
-    case 0x03:
-      res = gbReadSaveMBC1(file);
-      break;
-    case 0x06:
-      res = gbReadSaveMBC2(file);
-      break;
-    case 0x0d:
-      res = gbReadSaveMMM01(file);
-      break;
-    case 0x0f:
-    case 0x10:
-      if(!gbReadSaveMBC3(file)) {
-        time(&gbDataMBC3.mapperLastTime);
-        struct tm *lt;
-        lt = localtime(&gbDataMBC3.mapperLastTime);
-        gbDataMBC3.mapperSeconds = lt->tm_sec;
-        gbDataMBC3.mapperMinutes = lt->tm_min;
-        gbDataMBC3.mapperHours = lt->tm_hour;
-        gbDataMBC3.mapperDays = lt->tm_yday & 255;
-        gbDataMBC3.mapperControl = (gbDataMBC3.mapperControl & 0xfe) |
-          (lt->tm_yday > 255 ? 1: 0);
-        res = false;
-        break;
-      }
-      res = true;
-      break;
-    case 0x13:
-    case 0xfc:
-      res = gbReadSaveMBC3(file);
-      break;
-    case 0x1b:
-    case 0x1e:
-      res = gbReadSaveMBC5(file);
-      break;
-    case 0x22:
-      res = gbReadSaveMBC7(file);
-      break;
-    case 0xfd:
-      if(!gbReadSaveTAMA5(file)) {
-        u8 gbDaysinMonth [12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-        time(&gbDataTAMA5.mapperLastTime);
-        struct tm *lt;
-        lt = localtime(&gbDataTAMA5.mapperLastTime);
-        gbDataTAMA5.mapperSeconds = lt->tm_sec;
-        gbDataTAMA5.mapperMinutes = lt->tm_min;
-        gbDataTAMA5.mapperHours = lt->tm_hour;
-        gbDataTAMA5.mapperDays = 1;
-        gbDataTAMA5.mapperMonths = 1;
-        gbDataTAMA5.mapperYears = 1970;
-        int days = lt->tm_yday+365*3;
-        while (days)
-        {
-          gbDataTAMA5.mapperDays++;
-          days--;
-          if (gbDataTAMA5.mapperDays>gbDaysinMonth[gbDataTAMA5.mapperMonths-1])
-          {
-            gbDataTAMA5.mapperDays = 1;
-            gbDataTAMA5.mapperMonths++;
-            if (gbDataTAMA5.mapperMonths>12)
-            {
-               gbDataTAMA5.mapperMonths = 1;
-               gbDataTAMA5.mapperYears++;
-               if ((gbDataTAMA5.mapperYears & 3) == 0)
-                 gbDaysinMonth[1] = 29;
-               else
-                 gbDaysinMonth[1] = 28;
-            }
-          }
-        }
-        gbDataTAMA5.mapperControl = (gbDataTAMA5.mapperControl & 0xfe) |
-          (lt->tm_yday > 255 ? 1: 0);
-        res = false;
-        break;
-      }
-      res = true;
-      break;
-    case 0xff:
-      res = gbReadSaveMBC1(file);
-      break;
-    }
-  }
-  systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
-  return res;
-}
-
-bool gbReadGSASnapshot(const char *fileName)
-{
-  FILE *file = fopen(fileName, "rb");
-
-  if(!file) {
-    systemMessage(MSG_CANNOT_OPEN_FILE, N_("Cannot open file %s"), fileName);
-    return false;
-  }
-
-  fseek(file, 0x4, SEEK_SET);
-  char buffer[16];
-  char buffer2[16];
-  fread(buffer, 1, 15, file);
-  buffer[15] = 0;
-  memcpy(buffer2, &gbRom[0x134], 15);
-  buffer2[15] = 0;
-  if(memcmp(buffer, buffer2, 15)) {
-    systemMessage(MSG_CANNOT_IMPORT_SNAPSHOT_FOR,
-                  N_("Cannot import snapshot for %s. Current game is %s"),
-                  buffer,
-                  buffer2);
-    fclose(file);
-    return false;
-  }
-  fseek(file, 0x13, SEEK_SET);
-  size_t read = 0;
-  int toRead = 0;
-  switch(gbRomType) {
-  case 0x03:
-  case 0x0f:
-  case 0x10:
-  case 0x13:
-  case 0x1b:
-  case 0x1e:
-  case 0xff:
-    read = fread(gbRam, 1, (gbRamSizeMask+1), file);
-    toRead = (gbRamSizeMask+1);
-    break;
-  case 0x06:
-  case 0x22:
-    read = fread(&gbMemory[0xa000],1,256,file);
-    toRead = 256;
-    break;
-  default:
-    systemMessage(MSG_UNSUPPORTED_SNAPSHOT_FILE,
-                  N_("Unsupported snapshot file %s"),
-                  fileName);
-    fclose(file);
-    return false;
-  }
-  fclose(file);
-  gbReset();
-  return true;
-}
 
 variable_desc gbSaveGameStruct[] = {
   { &PC.W, sizeof(u16) },
@@ -3524,7 +3246,6 @@ variable_desc gbSaveGameStruct[] = {
   { &gbObp1[3], sizeof(u8) },
   { NULL, 0 }
 };
-
 
 static bool gbWriteSaveState(gzFile gzFile)
 {
@@ -4017,22 +3738,6 @@ bool gbReadSaveState(const char *name)
   return res;
 }
 
-bool gbWritePNGFile(const char *fileName)
-{
-/*  if(gbBorderOn)
-    return utilWritePNGFile(fileName, 256, 224, pix);
-  return utilWritePNGFile(fileName, 160, 144, pix);*/
-	return false;
-}
-
-bool gbWriteBMPFile(const char *fileName)
-{
-/*  if(gbBorderOn)
-    return utilWriteBMPFile(fileName, 256, 224, pix);
-  return utilWriteBMPFile(fileName, 160, 144, pix);*/
-	return false;
-}
-
 void gbCleanUp()
 {
   if(gbRam != NULL) {
@@ -4389,113 +4094,33 @@ int gbGetNextEvent (int _clockTicks)
 
 void gbDrawLine()
 {
-  switch(systemColorDepth) {
-    case 16:
-    {
-      u16 * dest = (u16 *)pix +
-                   (gbBorderLineSkip+2) * (register_LY + gbBorderRowSkip)
-                   + gbBorderColumnSkip;
-      for(int x = 0; x < 160; ) {
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
+	u16 * dest = (u16 *)pix +
+			   (gbBorderLineSkip+2) * (register_LY + gbBorderRowSkip)
+			   + gbBorderColumnSkip;
+	for(int x = 0; x < 160; ) {
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
 
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
 
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
 
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-        *dest++ = systemColorMap16[gbLineMix[x++]];
-      }
-      if(gbBorderOn)
-        dest += gbBorderColumnSkip;
-        *dest++ = 0; // for filters that read one pixel more
-    }
-    break;
-
-    case 24:
-    {
-      u8 *dest = (u8 *)pix +
-                 3*(gbBorderLineSkip * (register_LY + gbBorderRowSkip) +
-                 gbBorderColumnSkip);
-      for(int x = 0; x < 160;) {
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-        *((u32 *)dest) = systemColorMap32[gbLineMix[x++]];
-        dest+= 3;
-      }
-    }
-    break;
-
-    case 32:
-    {
-      u32 * dest = (u32 *)pix +
-                   (gbBorderLineSkip+1) * (register_LY + gbBorderRowSkip)
-                   + gbBorderColumnSkip;
-      for(int x = 0; x < 160;) {
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-        *dest++ = systemColorMap32[gbLineMix[x++]];
-      }
-    }
-    break;
-  }
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+		*dest++ = systemColorMap16[gbLineMix[x++]];
+	}
+	if(gbBorderOn)
+		dest += gbBorderColumnSkip;
+	*dest++ = 0; // for filters that read one pixel more
 }
 
 void gbEmulate(int ticksToStop)
@@ -4514,21 +4139,6 @@ void gbEmulate(int ticksToStop)
   bool execute = false;
 
   while(1) {
-#ifndef FINAL_VERSION
-    if(systemDebug) {
-      if(!(IFF & 0x80)) {
-        if(systemDebug > 1) {
-          sprintf(gbBuffer,"PC=%04x AF=%04x BC=%04x DE=%04x HL=%04x SP=%04x I=%04x\n",
-                   PC.W, AF.W, BC.W, DE.W,HL.W,SP.W,IFF);
-        } else {
-          sprintf(gbBuffer,"PC=%04x I=%02x\n", PC.W, IFF);
-        }
-        log(gbBuffer);
-      }
-    }
-#endif
-
-
     u16 oldPCW = PC.W;
 
     if(IFF & 0x80) {
@@ -5454,32 +5064,16 @@ struct EmulatedSystem GBSystem = {
   gbReset,
   // emuCleanUp
   gbCleanUp,
-  // emuReadBattery
-  gbReadBatteryFile,
-  // emuWriteBattery
-  gbWriteBatteryFile,
-  // emuReadState
-  gbReadSaveState,
-  // emuWriteState
-  gbWriteSaveState,
   // emuReadMemState
   gbReadMemSaveState,
   // emuWriteMemState
   gbWriteMemSaveState,
-  // emuWritePNG
-  gbWritePNGFile,
-  // emuWriteBMP
-  gbWriteBMPFile,
   // emuUpdateCPSR
   NULL,
   // emuHasDebugger
   false,
   // emuCount
-#ifdef FINAL_VERSION
   70000/4,
-#else
-  1000,
-#endif
 };
 
 /****************************************************************************
