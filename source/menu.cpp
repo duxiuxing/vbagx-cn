@@ -4010,7 +4010,7 @@ static int MenuSettingsMenu()
 				else if(GCSettings.language >= LANG_LENGTH)
 					GCSettings.language = LANG_JAPANESE;
 #endif
-				break;			
+				break;
 			case 6:
 				GCSettings.PreviewImage++;
 				if(GCSettings.PreviewImage >= PREVIEWIMAGE_LENGTH)
